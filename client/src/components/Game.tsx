@@ -5,7 +5,7 @@ import { useAudio } from "../lib/stores/useAudio";
 import { Zombie } from "./Zombie";
 import { Environment } from "./Environment";
 import { TypingInterface } from "./TypingInterface";
-import { GameHUD } from "./GameHUD";
+import { HUD } from "./HUD";
 import { WeaponSystem } from "./WeaponSystem";
 import * as THREE from "three";
 

@@ -2,8 +2,8 @@ import { useRef, useMemo, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Mesh, Group } from "three";
 import * as THREE from "three";
-import { Text } from "@react-three/drei";
 import { ParticleSystem } from "./ParticleSystem";
+import { WordPrompt } from "./WordPrompt";
 
 interface ZombieProps {
   zombie: {
@@ -126,20 +126,6 @@ export function Zombie({ zombie }: ZombieProps) {
 
   return (
     <group ref={groupRef} castShadow receiveShadow>
-      {/* Word above zombie head - only show for closest zombie */}
-      {zombie.isTargeted && (
-        <Text
-          position={[0, 3, 0]}
-          fontSize={0.8}
-          color={zombie.isTargeted ? "#ff0000" : "#ffffff"}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.1}
-          outlineColor="#000000"
-        >
-          {zombie.targetWord.toUpperCase()}
-        </Text>
-      )}
       
       {/* Advanced zombie body */}
       <mesh ref={bodyRef} position={[0, 0, 0]} castShadow>
@@ -238,6 +224,15 @@ export function Zombie({ zombie }: ZombieProps) {
           intensity={3}
         />
       )}
+      
+      {/* Word prompt above zombie */}
+      <WordPrompt
+        word={zombie.targetWord}
+        position={zombie.position}
+        isTargeted={zombie.isTargeted}
+        currentIndex={0} // We'll need to get this from the game state
+        isCompleted={zombie.animationState === 'dead'}
+      />
     </group>
   );
 }

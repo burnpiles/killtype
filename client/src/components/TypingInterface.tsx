@@ -59,58 +59,51 @@ export function TypingInterface() {
         autoFocus
       />
       
-      {/* Enhanced word display with targeting feedback */}
-      <div
-        style={{
-          backgroundColor: 'rgba(0, 0, 0, 0.9)',
-          padding: '25px 50px',
-          borderRadius: '15px',
-          border: missedShot ? '4px solid #ff0000' : '4px solid #00ff00',
-          fontSize: '36px',
-          fontFamily: 'monospace',
-          color: 'white',
-          minWidth: '400px',
-          transition: 'all 0.1s',
-          boxShadow: missedShot ? '0 0 20px #ff0000' : '0 0 20px #00ff00',
-          animation: missedShot ? 'shake 0.3s' : 'none'
-        }}
-      >
-        <div style={{ 
-          fontSize: '14px', 
-          color: '#00ff00', 
-          marginBottom: '10px',
-          textAlign: 'center'
-        }}>
-          🎯 TARGET LOCKED
-        </div>
-        
-        {currentWord.split('').map((char, index) => (
-          <span
-            key={index}
-            style={{
-              color: index < currentIndex ? '#00ff00' : 
-                     index === currentIndex ? '#ffff00' : '#cccccc',
-              backgroundColor: index === currentIndex ? 'rgba(255, 255, 0, 0.3)' : 'transparent',
-              padding: '4px',
-              fontWeight: index === currentIndex ? 'bold' : 'normal',
-              fontSize: index === currentIndex ? '40px' : '36px',
-              textShadow: index < currentIndex ? '0 0 8px #00ff00' : 
-                          index === currentIndex ? '0 0 8px #ffff00' : 'none',
-              transition: 'all 0.1s'
-            }}
-          >
-            {char}
-          </span>
-        ))}
-        
+      {/* Crosshair and targeting indicator */}
+      <div style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: '40px',
+        height: '40px',
+        pointerEvents: 'none'
+      }}>
+        {/* Crosshair */}
         <div style={{
-          marginTop: '10px',
-          fontSize: '16px',
-          color: '#ffff00',
-          textAlign: 'center'
-        }}>
-          Progress: {currentIndex}/{currentWord.length} | {Math.round((currentIndex/currentWord.length)*100)}%
-        </div>
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '2px',
+          height: '20px',
+          backgroundColor: missedShot ? '#ff0000' : '#00ff00',
+          boxShadow: `0 0 10px ${missedShot ? '#ff0000' : '#00ff00'}`
+        }} />
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '20px',
+          height: '2px',
+          backgroundColor: missedShot ? '#ff0000' : '#00ff00',
+          boxShadow: `0 0 10px ${missedShot ? '#ff0000' : '#00ff00'}`
+        }} />
+        
+        {/* Targeting circle */}
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '60px',
+          height: '60px',
+          border: `2px solid ${missedShot ? '#ff0000' : '#00ff00'}`,
+          borderRadius: '50%',
+          opacity: 0.5,
+          animation: missedShot ? 'pulse-red 0.3s' : 'none'
+        }} />
       </div>
       
       {/* Typing instructions */}

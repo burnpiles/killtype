@@ -4,7 +4,7 @@ import { KeyboardControls } from "@react-three/drei";
 import { useAudio } from "./lib/stores/useAudio";
 import { Game } from "./components/Game";
 import { TypingInterface } from "./components/TypingInterface";
-import { GameHUD } from "./components/GameHUD";
+import { HUD } from "./components/HUD";
 import { useZombieGame } from "./lib/stores/useZombieGame";
 import "@fontsource/inter";
 
@@ -82,7 +82,7 @@ function App() {
       
       {/* UI Overlay - Outside Canvas */}
       <TypingInterface />
-      <GameHUD />
+      <HUD />
       
       {/* Game Over Screen */}
       {gameState === 'gameOver' && (
