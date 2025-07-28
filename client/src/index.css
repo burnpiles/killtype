@@ -28,3 +28,43 @@ canvas {
   height: 100% !important;
   touch-action: none;
 }
+
+/* Zombie Game Animations */
+@keyframes shake {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  25% { transform: translateX(-50%) translateY(-5px); }
+  75% { transform: translateX(-50%) translateY(5px); }
+}
+
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 20px #ff0000; }
+  50% { box-shadow: 0 0 40px #ff0000; }
+}
+
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 20px #00ff00; }
+  50% { box-shadow: 0 0 40px #00ff00; }
+}
+
+/* HUD Glow Effects */
+.hud-glow {
+  text-shadow: 0 0 10px currentColor;
+}
+
+/* Crosshair Cursor */
+body {
+  cursor: crosshair !important;
+}
+
+/* Screen Flash Effects */
+@keyframes screen-flash-red {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(255, 0, 0, 0.3); }
+  100% { background-color: transparent; }
+}
+
+@keyframes screen-flash-green {
+  0% { background-color: transparent; }
+  50% { background-color: rgba(0, 255, 0, 0.2); }
+  100% { background-color: transparent; }
+}

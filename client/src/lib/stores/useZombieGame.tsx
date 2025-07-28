@@ -10,7 +10,16 @@ interface Zombie {
   health: number;
   maxHealth: number;
   speed: number;
-  targetWord?: string;
+  targetWord: string;
+  distanceToPlayer: number;
+  isTargeted: boolean;
+  animationState: 'walking' | 'attacking' | 'dying' | 'dead';
+  deathTime?: number;
+  hitEffect?: {
+    position: THREE.Vector3;
+    type: 'pistol' | 'shotgun' | 'flamethrower' | 'rocket' | 'nuke';
+    time: number;
+  };
 }
 
 interface ZombieGameState {
@@ -117,7 +126,10 @@ export const useZombieGame = create<ZombieGameState>()(
         health: 1 + Math.floor(state.level / 3),
         maxHealth: 1 + Math.floor(state.level / 3),
         speed: 1 + state.level * 0.2,
-        targetWord: state.currentWord
+        targetWord: generateWord(),
+        distanceToPlayer: 20,
+        isTargeted: false,
+        animationState: 'walking'
       };
       
       set(state => ({
@@ -126,16 +138,50 @@ export const useZombieGame = create<ZombieGameState>()(
     },
     
     updateZombies: (delta: number) => {
-      set(state => ({
-        zombies: state.zombies.map(zombie => ({
-          ...zombie,
-          position: new THREE.Vector3(
+      set(state => {
+        const updatedZombies = state.zombies.map(zombie => {
+          const newPosition = new THREE.Vector3(
             zombie.position.x,
             zombie.position.y,
             zombie.position.z + zombie.speed * delta
-          )
-        }))
-      }));
+          );
+          
+          const distanceToPlayer = Math.abs(newPosition.z - 8);
+          
+          // Update animation state based on distance
+          let animationState = zombie.animationState;
+          if (zombie.health <= 0) {
+            animationState = zombie.deathTime ? 'dead' : 'dying';
+          } else if (distanceToPlayer < 3) {
+            animationState = 'attacking';
+          } else {
+            animationState = 'walking';
+          }
+          
+          return {
+            ...zombie,
+            position: newPosition,
+            distanceToPlayer,
+            animationState
+          };
+        });
+        
+        // Sort zombies by distance (closest first) and mark the closest as targeted
+        const sortedZombies = updatedZombies.sort((a, b) => a.distanceToPlayer - b.distanceToPlayer);
+        const zombiesWithTarget = sortedZombies.map((zombie, index) => ({
+          ...zombie,
+          isTargeted: index === 0 && zombie.health > 0
+        }));
+        
+        // Update current word to match the closest zombie's word
+        const closestZombie = zombiesWithTarget.find(z => z.health > 0);
+        const newCurrentWord = closestZombie ? closestZombie.targetWord : state.currentWord;
+        
+        return {
+          zombies: zombiesWithTarget,
+          currentWord: newCurrentWord
+        };
+      });
     },
     
     processKeyPress: (key: string) => {
@@ -172,17 +218,43 @@ export const useZombieGame = create<ZombieGameState>()(
         // Word completed
         if (newIndex >= state.currentWord.length) {
           const wordScore = getWeaponConfig(state.currentWeapon).damage * 10;
+          const targetedZombie = state.zombies.find(z => z.isTargeted);
           
-          set({
-            currentWord: generateWord(),
-            currentIndex: 0,
-            missedShot: false,
-            score: state.score + wordScore,
-            streak: newStreak,
-            lastWordTime: now,
-            // Remove the first zombie (they're targeting this word)
-            zombies: state.zombies.slice(1)
-          });
+          if (targetedZombie) {
+            // Add hit effect to the targeted zombie
+            const updatedZombies = state.zombies.map(zombie => {
+              if (zombie.id === targetedZombie.id) {
+                const newHealth = zombie.health - getWeaponConfig(state.currentWeapon).damage;
+                return {
+                  ...zombie,
+                  health: Math.max(0, newHealth),
+                  hitEffect: {
+                    position: zombie.position.clone(),
+                    type: state.currentWeapon as any,
+                    time: now
+                  },
+                  animationState: newHealth <= 0 ? 'dying' : zombie.animationState,
+                  deathTime: newHealth <= 0 ? now : zombie.deathTime
+                };
+              }
+              return zombie;
+            }).filter(zombie => {
+              // Remove dead zombies after death animation
+              if (zombie.animationState === 'dead' || (zombie.deathTime && now - zombie.deathTime > 1000)) {
+                return false;
+              }
+              return true;
+            });
+            
+            set({
+              currentIndex: 0,
+              missedShot: false,
+              score: state.score + wordScore,
+              streak: newStreak,
+              lastWordTime: now,
+              zombies: updatedZombies
+            });
+          }
           
           get().updateWeapon();
         } else {
