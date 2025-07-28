@@ -5,6 +5,8 @@ import { Mesh, Group } from "three";
 import * as THREE from "three";
 import { ParticleSystem } from "./ParticleSystem";
 import { ExplosionEffect } from "./ExplosionEffect";
+import { WeaponImpactSystem } from "./WeaponImpactSystem";
+import { BloodSplatter } from "./BloodSplatter";
 import { WordPrompt } from "./WordPrompt";
 import { useZombieGame } from "../lib/stores/useZombieGame";
 
@@ -34,7 +36,10 @@ export function Zombie({ zombie }: ZombieProps) {
   
   const [animationTime, setAnimationTime] = useState(0);
   const [explosionActive, setExplosionActive] = useState(false);
-  const { currentIndex } = useZombieGame();
+  const [weaponImpactActive, setWeaponImpactActive] = useState(false);
+  const [bloodSplatterActive, setBloodSplatterActive] = useState(false);
+  const [randomExplosionChance] = useState(() => Math.random());
+  const { currentIndex, currentWeapon } = useZombieGame();
   
   // Load different zombie models for variety
   const zombieModels = [
@@ -59,19 +64,52 @@ export function Zombie({ zombie }: ZombieProps) {
       // Position the entire zombie group
       groupRef.current.position.copy(zombie.position);
       
-      // Trigger explosion when zombie starts dying
+      // Trigger explosion and weapon impact when zombie starts dying
       if (zombie.animationState === 'dying' && !explosionActive) {
         setExplosionActive(true);
-        // Reset explosion after animation
-        setTimeout(() => setExplosionActive(false), 2000);
+        setWeaponImpactActive(true);
+        setBloodSplatterActive(true);
+        // Reset effects after animation
+        setTimeout(() => {
+          setExplosionActive(false);
+          setWeaponImpactActive(false);
+          setBloodSplatterActive(false);
+        }, 4000);
       }
       
-      // Realistic walking animation for 3D model
+      // Realistic zombie shambling animation
       if (zombie.animationState === 'walking' && modelRef.current) {
-        // Subtle bobbing and swaying
-        modelRef.current.position.y = Math.sin(time * 6) * 0.1;
-        modelRef.current.rotation.y = Math.sin(time * 3) * 0.1;
-        modelRef.current.rotation.x = Math.sin(time * 4) * 0.05;
+        // Zombie shamble - irregular limping gait
+        const walkCycle = time * 3; // Slower zombie walk
+        const stepPhase = Math.sin(walkCycle);
+        const irregularity = Math.sin(walkCycle * 1.7) * 0.3; // Irregular timing
+        
+        // Body swaying side to side (zombie shamble)
+        modelRef.current.rotation.z = Math.sin(walkCycle * 0.8) * 0.15 + irregularity * 0.1;
+        
+        // Forward lean (zombie posture)
+        modelRef.current.rotation.x = -0.2 + Math.sin(walkCycle * 0.5) * 0.1;
+        
+        // Irregular head movements
+        modelRef.current.rotation.y = Math.sin(walkCycle * 1.3) * 0.2;
+        
+        // Vertical bobbing with limp
+        modelRef.current.position.y = Math.abs(stepPhase) * 0.08 + irregularity * 0.05;
+        
+        // Slight forward momentum variations
+        modelRef.current.position.z += Math.sin(walkCycle * 2) * 0.002;
+        
+        // Random explosion chance (1% chance for dramatic effect)
+        if (randomExplosionChance < 0.01 && Math.random() < 0.0001 && !explosionActive) {
+          setExplosionActive(true);
+          setWeaponImpactActive(true);
+          setBloodSplatterActive(true);
+          setTimeout(() => {
+            setExplosionActive(false);
+            setWeaponImpactActive(false);
+            setBloodSplatterActive(false);
+          }, 4000);
+        }
       }
       
       // Aggressive attacking animation
@@ -139,6 +177,21 @@ export function Zombie({ zombie }: ZombieProps) {
         />
       )}
       
+      {/* Spectacular Blood Splatter Effects */}
+      <BloodSplatter
+        position={zombie.position}
+        intensity={currentWeapon.damage}
+        active={bloodSplatterActive}
+      />
+
+      {/* Spectacular Weapon Impact Effects with Flying Limbs */}
+      <WeaponImpactSystem
+        position={zombie.position}
+        weaponType={currentWeapon.name as 'pistol' | 'shotgun' | 'flamethrower' | 'rocket' | 'nuke'}
+        active={weaponImpactActive}
+        onComplete={() => setWeaponImpactActive(false)}
+      />
+
       {/* Spectacular Explosion Effect when zombie dies */}
       <ExplosionEffect
         position={zombie.position}
