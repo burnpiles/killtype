@@ -11,6 +11,9 @@ interface WordPromptProps {
 
 export function WordPrompt({ word, position, isTargeted, currentIndex, isCompleted }: WordPromptProps) {
   if (isCompleted) return null;
+  
+  // Debug logging
+  console.log('WordPrompt:', { word, isTargeted, currentIndex, isCompleted });
 
   return (
     <Html

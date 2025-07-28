@@ -166,19 +166,32 @@ export const useZombieGame = create<ZombieGameState>()(
           };
         });
         
-        // Sort zombies by distance (closest first) and mark the closest as targeted
-        const sortedZombies = updatedZombies.sort((a, b) => a.distanceToPlayer - b.distanceToPlayer);
-        const zombiesWithTarget = sortedZombies.map((zombie, index) => ({
-          ...zombie,
-          isTargeted: index === 0 && zombie.health > 0
-        }));
+        // Filter out dead zombies first, then sort by distance
+        const livingZombies = updatedZombies.filter(z => z.health > 0 && z.animationState !== 'dead');
+        const deadZombies = updatedZombies.filter(z => z.health <= 0 || z.animationState === 'dead');
         
-        // Update current word to match the closest zombie's word
-        const closestZombie = zombiesWithTarget.find(z => z.health > 0);
+        // Sort living zombies by distance (closest first) and mark the closest as targeted
+        const sortedLivingZombies = livingZombies.sort((a, b) => a.distanceToPlayer - b.distanceToPlayer);
+        const zombiesWithTarget = [
+          ...sortedLivingZombies.map((zombie, index) => ({
+            ...zombie,
+            isTargeted: index === 0
+          })),
+          ...deadZombies.map(zombie => ({
+            ...zombie,
+            isTargeted: false
+          }))
+        ];
+        
+        // Update current word to match the closest living zombie's word
+        const closestZombie = sortedLivingZombies[0];
         const newCurrentWord = closestZombie ? closestZombie.targetWord : '';
         
         // Reset typing progress if we switched to a new target
         const shouldResetIndex = newCurrentWord !== state.currentWord;
+        
+        // Debug logging
+        console.log('Living zombies:', livingZombies.length, 'Current word:', newCurrentWord, 'Should reset:', shouldResetIndex);
         
         return {
           zombies: zombiesWithTarget,
