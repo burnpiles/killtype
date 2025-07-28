@@ -26,7 +26,7 @@ export function BloodSplatter({ position, intensity = 1, onComplete }: BloodSpla
   useEffect(() => {
     // Create blood particles on mount
     const newParticles: BloodParticle[] = [];
-    const particleCount = Math.floor(20 * intensity);
+    const particleCount = Math.min(12, Math.floor(8 * intensity));
 
     for (let i = 0; i < particleCount; i++) {
       const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
@@ -60,7 +60,7 @@ export function BloodSplatter({ position, intensity = 1, onComplete }: BloodSpla
 
   useFrame((state, delta) => {
     setParticles(prev => {
-      const updated = prev.map(particle => {
+      return prev.map(particle => {
         const newParticle = { ...particle };
         
         // Update position with velocity
@@ -79,8 +79,6 @@ export function BloodSplatter({ position, intensity = 1, onComplete }: BloodSpla
         
         return newParticle;
       }).filter(particle => particle.life < particle.maxLife);
-      
-      return updated;
     });
   });
 

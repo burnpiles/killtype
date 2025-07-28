@@ -28,7 +28,7 @@ export function FlyingLimbs({ position, explosionForce = 1, onComplete }: Flying
   useEffect(() => {
     // Create flying limbs on explosive death
     const newLimbs: FlyingLimb[] = [];
-    const limbTypes: FlyingLimb['limbType'][] = ['arm', 'arm', 'leg', 'leg', 'head', 'torso'];
+    const limbTypes: FlyingLimb['limbType'][] = ['arm', 'leg', 'head', 'torso'];
 
     limbTypes.forEach((limbType, i) => {
       const angle = (Math.PI * 2 * i) / limbTypes.length + (Math.random() - 0.5) * 1;
@@ -88,7 +88,7 @@ export function FlyingLimbs({ position, explosionForce = 1, onComplete }: Flying
 
   useFrame((state, delta) => {
     setLimbs(prev => {
-      const updated = prev.map(limb => {
+      return prev.map(limb => {
         const newLimb = { ...limb };
         
         // Update position with velocity
@@ -121,8 +121,6 @@ export function FlyingLimbs({ position, explosionForce = 1, onComplete }: Flying
         
         return newLimb;
       }).filter(limb => limb.life < limb.maxLife && limb.position.y > -10);
-      
-      return updated;
     });
   });
 

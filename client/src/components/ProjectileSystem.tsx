@@ -74,20 +74,17 @@ export function ProjectileSystem({ onProjectileHit }: ProjectileSystemProps) {
   // Update projectiles each frame
   useFrame((state, delta) => {
     setProjectiles(prev => {
-      const updated = prev.map(projectile => {
+      return prev.map(projectile => {
         const newPosition = projectile.position.clone();
         newPosition.add(
           projectile.direction.clone().multiplyScalar(projectile.speed * delta)
         );
 
-        // Check if projectile traveled max distance or hit something
-        const travelDistance = newPosition.distanceTo(
-          projectile.position.clone().sub(
-            projectile.direction.clone().multiplyScalar(projectile.speed * delta * 100)
-          )
-        );
+        // Simple distance check
+        const travelTime = (Date.now() - projectile.startTime) / 1000;
+        const maxTime = projectile.maxDistance / projectile.speed;
 
-        if (travelDistance > projectile.maxDistance) {
+        if (travelTime > maxTime) {
           return null; // Remove projectile
         }
 
@@ -96,8 +93,6 @@ export function ProjectileSystem({ onProjectileHit }: ProjectileSystemProps) {
           position: newPosition
         };
       }).filter(Boolean) as Projectile[];
-
-      return updated;
     });
   });
 
