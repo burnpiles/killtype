@@ -34,11 +34,12 @@ Preferred communication style: Simple, everyday language.
 ## Key Components
 
 ### Game Engine
-- **3D Environment**: Three.js-based zombie survival game with physics
+- **3D Environment**: Three.js-based zombie survival game with physics and photorealistic models
 - **Typing System**: Real-time word generation and input processing
 - **Weapon System**: Progressive weapon upgrades based on performance
 - **Audio System**: Sound effects and background music with mute controls
 - **Game Loop**: Frame-based updates for zombie movement and collision detection
+- **Visual Effects**: Explosive death animations and particle systems for AAA-quality gameplay
 
 ### State Management
 - **useZombieGame**: Main game state including zombies, weapons, stats
@@ -83,6 +84,8 @@ Preferred communication style: Simple, everyday language.
 
 ### Audio & Assets
 - **GLSL shader support**: For advanced 3D effects
+- **3D Model Assets**: High-quality photorealistic zombie models (zombie_01.glb, zombie_02.glb, zombie_03.glb)
+- **Particle Systems**: Explosive death effects and weapon impact particles
 - **Asset pipeline**: Support for 3D models (.gltf, .glb) and audio files
 - **Font loading**: Inter font family integration
 

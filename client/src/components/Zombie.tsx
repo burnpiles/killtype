@@ -1,8 +1,10 @@
 import { useRef, useMemo, useState } from "react";
 import { useFrame } from "@react-three/fiber";
+import { useGLTF } from "@react-three/drei";
 import { Mesh, Group } from "three";
 import * as THREE from "three";
 import { ParticleSystem } from "./ParticleSystem";
+import { ExplosionEffect } from "./ExplosionEffect";
 import { WordPrompt } from "./WordPrompt";
 import { useZombieGame } from "../lib/stores/useZombieGame";
 
@@ -28,17 +30,26 @@ interface ZombieProps {
 
 export function Zombie({ zombie }: ZombieProps) {
   const groupRef = useRef<Group>(null);
-  const bodyRef = useRef<Mesh>(null);
-  const leftArmRef = useRef<Mesh>(null);
-  const rightArmRef = useRef<Mesh>(null);
-  const leftLegRef = useRef<Mesh>(null);
-  const rightLegRef = useRef<Mesh>(null);
-  const weaponRef = useRef<Mesh>(null);
+  const modelRef = useRef<Group>(null);
   
   const [animationTime, setAnimationTime] = useState(0);
+  const [explosionActive, setExplosionActive] = useState(false);
   const { currentIndex } = useZombieGame();
+  
+  // Load different zombie models for variety
+  const zombieModels = [
+    useGLTF('/models/zombie_01.glb'),
+    useGLTF('/models/zombie_02.glb'),
+    useGLTF('/models/zombie_03.glb')
+  ];
+  
+  // Select model based on zombie ID for consistency
+  const selectedModel = useMemo(() => {
+    const modelIndex = Math.abs(zombie.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % 3;
+    return zombieModels[modelIndex];
+  }, [zombie.id, zombieModels]);
 
-  // Advanced animation system
+  // Trigger explosion effect when zombie dies
   useFrame((state, delta) => {
     setAnimationTime(prev => prev + delta);
     
@@ -48,64 +59,46 @@ export function Zombie({ zombie }: ZombieProps) {
       // Position the entire zombie group
       groupRef.current.position.copy(zombie.position);
       
-      // Realistic walking animation
-      if (zombie.animationState === 'walking') {
-        // Body bobbing
-        if (bodyRef.current) {
-          bodyRef.current.position.y = 0.1 + Math.sin(time * 8) * 0.05;
-          bodyRef.current.rotation.x = Math.sin(time * 8) * 0.05;
-        }
-        
-        // Arm swinging (realistic human-like movement)
-        if (leftArmRef.current && rightArmRef.current) {
-          leftArmRef.current.rotation.x = Math.sin(time * 8) * 0.6;
-          rightArmRef.current.rotation.x = -Math.sin(time * 8) * 0.6;
-          leftArmRef.current.rotation.z = 0.3 + Math.sin(time * 4) * 0.1;
-          rightArmRef.current.rotation.z = -0.3 - Math.sin(time * 4) * 0.1;
-        }
-        
-        // Leg movement (walking stride)
-        if (leftLegRef.current && rightLegRef.current) {
-          leftLegRef.current.rotation.x = Math.sin(time * 8) * 0.8;
-          rightLegRef.current.rotation.x = -Math.sin(time * 8) * 0.8;
-        }
+      // Trigger explosion when zombie starts dying
+      if (zombie.animationState === 'dying' && !explosionActive) {
+        setExplosionActive(true);
+        // Reset explosion after animation
+        setTimeout(() => setExplosionActive(false), 2000);
+      }
+      
+      // Realistic walking animation for 3D model
+      if (zombie.animationState === 'walking' && modelRef.current) {
+        // Subtle bobbing and swaying
+        modelRef.current.position.y = Math.sin(time * 6) * 0.1;
+        modelRef.current.rotation.y = Math.sin(time * 3) * 0.1;
+        modelRef.current.rotation.x = Math.sin(time * 4) * 0.05;
       }
       
       // Aggressive attacking animation
-      else if (zombie.animationState === 'attacking') {
-        // Violent arm movements
-        if (leftArmRef.current && rightArmRef.current) {
-          leftArmRef.current.rotation.x = -1.2 + Math.sin(time * 15) * 0.8;
-          rightArmRef.current.rotation.x = -1.2 + Math.sin(time * 15 + Math.PI) * 0.8;
-          leftArmRef.current.rotation.z = 0.8;
-          rightArmRef.current.rotation.z = -0.8;
-        }
-        
-        // Body lurching forward aggressively
-        if (bodyRef.current) {
-          bodyRef.current.rotation.x = -0.3 + Math.sin(time * 12) * 0.2;
-          bodyRef.current.position.y = Math.sin(time * 12) * 0.1;
-        }
-        
-        // Weapon swinging
-        if (weaponRef.current) {
-          weaponRef.current.rotation.z = Math.sin(time * 15) * 1.5;
-        }
+      else if (zombie.animationState === 'attacking' && modelRef.current) {
+        // Lunging forward motion
+        modelRef.current.rotation.x = -0.3 + Math.sin(time * 20) * 0.3;
+        modelRef.current.position.y = Math.sin(time * 20) * 0.2;
+        modelRef.current.scale.setScalar(1 + Math.sin(time * 25) * 0.1);
       }
       
-      // Death animation
-      else if (zombie.animationState === 'dying') {
+      // Spectacular death animation with explosion
+      else if (zombie.animationState === 'dying' && modelRef.current) {
         const deathProgress = zombie.deathTime ? 
           Math.min(1, (Date.now() - zombie.deathTime) / 1000) : 0;
         
-        if (bodyRef.current) {
-          bodyRef.current.rotation.x = deathProgress * Math.PI * 0.5;
-          bodyRef.current.position.y = -deathProgress * 1.5;
-        }
+        // Explosive death - model fragments and disappears
+        modelRef.current.rotation.x = deathProgress * Math.PI * 2;
+        modelRef.current.rotation.y = deathProgress * Math.PI * 1.5;
+        modelRef.current.rotation.z = deathProgress * Math.PI;
+        modelRef.current.scale.setScalar(1 - deathProgress * 0.8);
+        modelRef.current.position.y = -deathProgress * 2;
         
-        // Limbs falling
-        if (leftArmRef.current) leftArmRef.current.rotation.z = deathProgress * 2;
-        if (rightArmRef.current) rightArmRef.current.rotation.z = -deathProgress * 2;
+        // Add violent shaking during explosion
+        if (deathProgress < 0.5) {
+          modelRef.current.position.x += (Math.random() - 0.5) * 0.3;
+          modelRef.current.position.z += (Math.random() - 0.5) * 0.3;
+        }
       }
     }
   });
@@ -127,87 +120,15 @@ export function Zombie({ zombie }: ZombieProps) {
   }, [zombie.health, zombie.maxHealth, zombie.animationState, zombie.isTargeted]);
 
   return (
-    <group ref={groupRef} castShadow receiveShadow>
-      
-      {/* Advanced zombie body */}
-      <mesh ref={bodyRef} position={[0, 0, 0]} castShadow>
-        <boxGeometry args={[0.9, 2.2, 0.6]} />
-        <meshLambertMaterial color={zombieColor} />
-        
-        {/* Detailed zombie head with more realistic features */}
-        <mesh position={[0, 1.4, 0]} castShadow>
-          <boxGeometry args={[0.7, 0.8, 0.7]} />
-          <meshLambertMaterial color={zombieColor} />
-          
-          {/* Glowing red eyes */}
-          <mesh position={[-0.2, 0.1, 0.35]}>
-            <sphereGeometry args={[0.08, 8, 8]} />
-            <meshBasicMaterial color="#ff0000" />
-          </mesh>
-          <mesh position={[0.2, 0.1, 0.35]}>
-            <sphereGeometry args={[0.08, 8, 8]} />
-            <meshBasicMaterial color="#ff0000" />
-          </mesh>
-          
-          {/* Grotesque mouth */}
-          <mesh position={[0, -0.2, 0.35]}>
-            <boxGeometry args={[0.3, 0.1, 0.1]} />
-            <meshBasicMaterial color="#000000" />
-          </mesh>
-        </mesh>
-      </mesh>
-      
-      {/* Articulated arms with realistic joints */}
-      <mesh ref={leftArmRef} position={[-0.7, 0.5, 0]} castShadow>
-        <boxGeometry args={[0.25, 1.2, 0.25]} />
-        <meshLambertMaterial color={zombieColor} />
-        
-        {/* Hand/Claw */}
-        <mesh position={[0, -0.8, 0]}>
-          <boxGeometry args={[0.15, 0.3, 0.15]} />
-          <meshLambertMaterial color={zombieColor.clone().multiplyScalar(0.8)} />
-        </mesh>
-      </mesh>
-      
-      <mesh ref={rightArmRef} position={[0.7, 0.5, 0]} castShadow>
-        <boxGeometry args={[0.25, 1.2, 0.25]} />
-        <meshLambertMaterial color={zombieColor} />
-        
-        {/* Zombie weapon - rusty knife */}
-        <mesh ref={weaponRef} position={[0, -0.8, 0.2]} castShadow>
-          <boxGeometry args={[0.05, 0.6, 0.02]} />
-          <meshLambertMaterial color="#666666" />
-        </mesh>
-        
-        {/* Hand holding weapon */}
-        <mesh position={[0, -0.8, 0]}>
-          <boxGeometry args={[0.15, 0.3, 0.15]} />
-          <meshLambertMaterial color={zombieColor.clone().multiplyScalar(0.8)} />
-        </mesh>
-      </mesh>
-      
-      {/* Realistic legs with joints */}
-      <mesh ref={leftLegRef} position={[-0.25, -1.5, 0]} castShadow>
-        <boxGeometry args={[0.3, 1.2, 0.3]} />
-        <meshLambertMaterial color={zombieColor} />
-        
-        {/* Foot */}
-        <mesh position={[0, -0.8, 0.2]}>
-          <boxGeometry args={[0.25, 0.15, 0.5]} />
-          <meshLambertMaterial color={zombieColor.clone().multiplyScalar(0.7)} />
-        </mesh>
-      </mesh>
-      
-      <mesh ref={rightLegRef} position={[0.25, -1.5, 0]} castShadow>
-        <boxGeometry args={[0.3, 1.2, 0.3]} />
-        <meshLambertMaterial color={zombieColor} />
-        
-        {/* Foot */}
-        <mesh position={[0, -0.8, 0.2]}>
-          <boxGeometry args={[0.25, 0.15, 0.5]} />
-          <meshLambertMaterial color={zombieColor.clone().multiplyScalar(0.7)} />
-        </mesh>
-      </mesh>
+    <group ref={groupRef}>
+      {/* Photorealistic 3D Zombie Model */}
+      <group ref={modelRef} scale={2.5}>
+        <primitive 
+          object={selectedModel.scene.clone()} 
+          castShadow 
+          receiveShadow
+        />
+      </group>
       
       {/* Particle effects when hit */}
       {zombie.hitEffect && Date.now() - zombie.hitEffect.time < 1000 && (
@@ -217,6 +138,13 @@ export function Zombie({ zombie }: ZombieProps) {
           intensity={1}
         />
       )}
+      
+      {/* Spectacular Explosion Effect when zombie dies */}
+      <ExplosionEffect
+        position={zombie.position}
+        active={explosionActive}
+        onComplete={() => setExplosionActive(false)}
+      />
       
       {/* Death explosion for rocket launcher */}
       {zombie.animationState === 'dying' && zombie.hitEffect?.type === 'rocket' && (

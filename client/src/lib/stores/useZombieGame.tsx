@@ -190,8 +190,7 @@ export const useZombieGame = create<ZombieGameState>()(
         // Reset typing progress if we switched to a new target
         const shouldResetIndex = newCurrentWord !== state.currentWord;
         
-        // Debug logging
-        console.log('Living zombies:', livingZombies.length, 'Current word:', newCurrentWord, 'Should reset:', shouldResetIndex);
+
         
         return {
           zombies: zombiesWithTarget,
