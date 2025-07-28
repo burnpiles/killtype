@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useZombieGame } from "../lib/stores/useZombieGame";
+import * as THREE from "three";
 
 export function TypingInterface() {
   const {
@@ -19,14 +20,33 @@ export function TypingInterface() {
         // Prevent default behavior for game keys
         if (event.key.length === 1 || event.key === 'Backspace') {
           event.preventDefault();
+          
+          // Store current index before processing
+          const prevIndex = currentIndex;
+          
           processKeyPress(event.key);
+          
+          // Trigger weapon effects if correct character was typed
+          setTimeout(() => {
+            if (currentIndex > prevIndex) {
+              // Correct character typed - fire weapon
+              if ((window as any).triggerWeaponFire) {
+                (window as any).triggerWeaponFire();
+              }
+              if ((window as any).fireProjectile) {
+                const direction = new THREE.Vector3(0, 0, -1); // Forward direction
+                const startPos = new THREE.Vector3(1.2, -2.8, -0.5); // Weapon position
+                (window as any).fireProjectile(startPos, direction, 'pistol');
+              }
+            }
+          }, 50);
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [processKeyPress, gameState]);
+  }, [processKeyPress, gameState, currentIndex]);
 
   // Auto-focus to capture typing
   useEffect(() => {

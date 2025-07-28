@@ -5,7 +5,6 @@ import { Mesh, Group } from "three";
 import * as THREE from "three";
 import { ParticleSystem } from "./ParticleSystem";
 import { ExplosionEffect } from "./ExplosionEffect";
-import { WeaponImpactSystem } from "./WeaponImpactSystem";
 import { BloodSplatter } from "./BloodSplatter";
 import { WordPrompt } from "./WordPrompt";
 import { useZombieGame } from "../lib/stores/useZombieGame";
@@ -36,7 +35,7 @@ export function Zombie({ zombie }: ZombieProps) {
   
   const [animationTime, setAnimationTime] = useState(0);
   const [explosionActive, setExplosionActive] = useState(false);
-  const [weaponImpactActive, setWeaponImpactActive] = useState(false);
+
   const [bloodSplatterActive, setBloodSplatterActive] = useState(false);
   const [randomExplosionChance] = useState(() => Math.random());
   const { currentIndex, currentWeapon } = useZombieGame();
@@ -77,27 +76,34 @@ export function Zombie({ zombie }: ZombieProps) {
         }, 4000);
       }
       
-      // Realistic zombie shambling animation
+      // Ultra-realistic zombie shambling animation matching The Typing of the Dead
       if (zombie.animationState === 'walking' && modelRef.current) {
-        // Zombie shamble - irregular limping gait
-        const walkCycle = time * 3; // Slower zombie walk
-        const stepPhase = Math.sin(walkCycle);
-        const irregularity = Math.sin(walkCycle * 1.7) * 0.3; // Irregular timing
+        // Professional zombie walk cycle - much more realistic
+        const walkSpeed = 2.5;
+        const walkCycle = time * walkSpeed;
+        const leftStep = Math.sin(walkCycle);
+        const rightStep = Math.sin(walkCycle + Math.PI);
+        const bodyBob = Math.abs(Math.sin(walkCycle * 2)) * 0.12;
         
-        // Body swaying side to side (zombie shamble)
-        modelRef.current.rotation.z = Math.sin(walkCycle * 0.8) * 0.15 + irregularity * 0.1;
+        // Realistic limping gait with weight shifting
+        const limp = Math.sin(walkCycle * 0.7) * 0.3;
+        const weightShift = Math.sin(walkCycle * 1.2) * 0.1;
         
-        // Forward lean (zombie posture)
-        modelRef.current.rotation.x = -0.2 + Math.sin(walkCycle * 0.5) * 0.1;
+        // Professional body animations
+        modelRef.current.rotation.z = weightShift + limp * 0.2; // Side-to-side sway
+        modelRef.current.rotation.x = -0.3 + Math.sin(walkCycle * 0.8) * 0.15; // Forward hunch
+        modelRef.current.rotation.y = Math.sin(walkCycle * 0.6) * 0.25; // Head swaying
         
-        // Irregular head movements
-        modelRef.current.rotation.y = Math.sin(walkCycle * 1.3) * 0.2;
+        // Realistic vertical movement with stumbling
+        modelRef.current.position.y = bodyBob + Math.sin(walkCycle * 3.2) * 0.05;
         
-        // Vertical bobbing with limp
-        modelRef.current.position.y = Math.abs(stepPhase) * 0.08 + irregularity * 0.05;
+        // Irregular forward shambling with stuttering steps
+        const shambleIrregularity = Math.sin(walkCycle * 1.3) * 0.003;
+        modelRef.current.position.z += shambleIrregularity;
         
-        // Slight forward momentum variations
-        modelRef.current.position.z += Math.sin(walkCycle * 2) * 0.002;
+        // Add arm swinging motion for realism
+        const armSwing = Math.sin(walkCycle * 1.5) * 0.4;
+        modelRef.current.rotation.x += armSwing * 0.1;
         
         // Random explosion chance (1% chance for dramatic effect)
         if (randomExplosionChance < 0.01 && Math.random() < 0.0001 && !explosionActive) {
@@ -136,6 +142,16 @@ export function Zombie({ zombie }: ZombieProps) {
         if (deathProgress < 0.5) {
           modelRef.current.position.x += (Math.random() - 0.5) * 0.3;
           modelRef.current.position.z += (Math.random() - 0.5) * 0.3;
+        }
+        
+        // Trigger spectacular blood effects during death
+        if (deathProgress > 0.1 && !bloodSplatterActive) {
+          setBloodSplatterActive(true);
+        }
+        
+        // Trigger explosion effect for dramatic deaths
+        if (deathProgress > 0.3 && !explosionActive && randomExplosionChance > 0.7) {
+          setExplosionActive(true);
         }
       }
     }
@@ -178,19 +194,13 @@ export function Zombie({ zombie }: ZombieProps) {
       )}
       
       {/* Spectacular Blood Splatter Effects */}
-      <BloodSplatter
-        position={zombie.position}
-        intensity={currentWeapon.damage}
-        active={bloodSplatterActive}
-      />
-
-      {/* Spectacular Weapon Impact Effects with Flying Limbs */}
-      <WeaponImpactSystem
-        position={zombie.position}
-        weaponType={currentWeapon.name as 'pistol' | 'shotgun' | 'flamethrower' | 'rocket' | 'nuke'}
-        active={weaponImpactActive}
-        onComplete={() => setWeaponImpactActive(false)}
-      />
+      {bloodSplatterActive && (
+        <BloodSplatter
+          position={zombie.position}
+          intensity={currentWeapon.damage}
+          onComplete={() => setBloodSplatterActive(false)}
+        />
+      )}
 
       {/* Spectacular Explosion Effect when zombie dies */}
       <ExplosionEffect

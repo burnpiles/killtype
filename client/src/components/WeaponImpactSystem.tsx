@@ -1,244 +1,214 @@
-import { useRef, useMemo, useState, useEffect } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useState, useEffect } from "react";
 import * as THREE from "three";
+import { BloodSplatter } from "./BloodSplatter";
+import { FlyingLimbs } from "./FlyingLimbs";
 
-interface WeaponImpactProps {
+interface ImpactEffect {
+  id: string;
   position: THREE.Vector3;
   weaponType: 'pistol' | 'shotgun' | 'flamethrower' | 'rocket' | 'nuke';
-  active: boolean;
-  onComplete?: () => void;
+  intensity: number;
+  timestamp: number;
 }
 
-export function WeaponImpactSystem({ position, weaponType, active, onComplete }: WeaponImpactProps) {
-  const groupRef = useRef<THREE.Group>(null);
-  const impactStartTime = useRef(0);
-  const [limbFragments, setLimbFragments] = useState<Array<{
-    id: number;
-    position: THREE.Vector3;
-    velocity: THREE.Vector3;
-    rotation: THREE.Vector3;
-    type: 'arm' | 'leg' | 'head' | 'torso';
-  }>>([]);
+interface WeaponImpactSystemProps {
+  impacts: ImpactEffect[];
+  onEffectComplete?: (id: string) => void;
+}
 
-  // Generate flying limbs and gore based on weapon type
-  const generateImpactEffects = useMemo(() => {
-    if (!active) return null;
-
-    const effects = [];
-    let limbCount = 0;
-    let bloodIntensity = 1;
-
-    switch (weaponType) {
-      case 'pistol':
-        limbCount = 1;
-        bloodIntensity = 0.5;
-        break;
-      case 'shotgun':
-        limbCount = 3;
-        bloodIntensity = 1.5;
-        break;
-      case 'flamethrower':
-        limbCount = 2;
-        bloodIntensity = 0.8;
-        break;
-      case 'rocket':
-        limbCount = 5;
-        bloodIntensity = 3;
-        break;
-      case 'nuke':
-        limbCount = 8;
-        bloodIntensity = 5;
-        break;
-    }
-
-    // Generate random limb fragments
-    const limbTypes: ('arm' | 'leg' | 'head' | 'torso')[] = ['arm', 'leg', 'head', 'torso'];
-    const fragments = [];
-
-    for (let i = 0; i < limbCount; i++) {
-      const limbType = limbTypes[Math.floor(Math.random() * limbTypes.length)];
-      const explosionForce = weaponType === 'nuke' ? 15 : weaponType === 'rocket' ? 10 : 5;
-      
-      fragments.push({
-        id: i,
-        position: new THREE.Vector3(
-          position.x + (Math.random() - 0.5) * 2,
-          position.y + Math.random() * 2,
-          position.z + (Math.random() - 0.5) * 2
-        ),
-        velocity: new THREE.Vector3(
-          (Math.random() - 0.5) * explosionForce,
-          Math.random() * explosionForce * 0.8 + 3,
-          (Math.random() - 0.5) * explosionForce
-        ),
-        rotation: new THREE.Vector3(
-          Math.random() * Math.PI * 2,
-          Math.random() * Math.PI * 2,
-          Math.random() * Math.PI * 2
-        ),
-        type: limbType
-      });
-    }
-
-    return { fragments, bloodIntensity };
-  }, [active, weaponType, position]);
+export function WeaponImpactSystem({ impacts, onEffectComplete }: WeaponImpactSystemProps) {
+  const [activeEffects, setActiveEffects] = useState<ImpactEffect[]>([]);
 
   useEffect(() => {
-    if (generateImpactEffects) {
-      setLimbFragments(generateImpactEffects.fragments);
-    }
-  }, [generateImpactEffects]);
-
-  // Simple blood effect spheres instead of complex particles
-  const bloodSpheres = useMemo(() => {
-    if (!active) return [];
+    // Add new impacts to active effects
+    const newEffects = impacts.filter(impact => 
+      !activeEffects.find(active => active.id === impact.id)
+    );
     
-    const spheres = [];
-    const count = weaponType === 'nuke' ? 20 : weaponType === 'rocket' ? 15 : 8;
-    
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2;
-      const distance = 1 + Math.random() * 2;
-      
-      spheres.push({
-        id: i,
-        position: new THREE.Vector3(
-          Math.cos(angle) * distance,
-          Math.random() * 2,
-          Math.sin(angle) * distance
-        ),
-        velocity: new THREE.Vector3(
-          Math.cos(angle) * (3 + Math.random() * 5),
-          2 + Math.random() * 4,
-          Math.sin(angle) * (3 + Math.random() * 5)
-        ),
-        size: 0.05 + Math.random() * 0.1
-      });
+    if (newEffects.length > 0) {
+      setActiveEffects(prev => [...prev, ...newEffects]);
     }
-    
-    return spheres;
-  }, [active, weaponType]);
+  }, [impacts, activeEffects]);
 
-  useFrame((state, delta) => {
-    if (!active) return;
-
-    if (impactStartTime.current === 0) {
-      impactStartTime.current = state.clock.elapsedTime;
-    }
-
-    const elapsedTime = state.clock.elapsedTime - impactStartTime.current;
-    const effectDuration = 3.0;
-
-    if (elapsedTime > effectDuration) {
-      if (onComplete) onComplete();
-      return;
-    }
-
-    // Update limb fragments
-    setLimbFragments(prev => prev.map(limb => {
-      const newVelocity = limb.velocity.clone();
-      newVelocity.y -= 9.8 * delta; // Gravity
-      newVelocity.multiplyScalar(0.98); // Air resistance
-
-      const newPosition = limb.position.clone();
-      newPosition.add(newVelocity.clone().multiplyScalar(delta));
-
-      const newRotation = limb.rotation.clone();
-      newRotation.x += delta * 5;
-      newRotation.y += delta * 3;
-      newRotation.z += delta * 4;
-
-      return {
-        ...limb,
-        position: newPosition,
-        velocity: newVelocity,
-        rotation: newRotation
-      };
-    }));
-
-    // Update blood sphere positions with simple physics
-    // No buffer attribute updates needed - just visual effects
-  });
-
-  if (!active) return null;
+  const handleEffectComplete = (effectId: string) => {
+    setActiveEffects(prev => prev.filter(effect => effect.id !== effectId));
+    onEffectComplete?.(effectId);
+  };
 
   return (
-    <group ref={groupRef} position={position}>
-      {/* Blood spray spheres */}
-      {bloodSpheres.map((sphere) => (
-        <mesh key={sphere.id} position={sphere.position}>
-          <sphereGeometry args={[sphere.size, 6, 6]} />
-          <meshBasicMaterial color="#8B0000" transparent opacity={0.8} />
-        </mesh>
+    <>
+      {activeEffects.map(effect => (
+        <WeaponImpactEffect 
+          key={effect.id} 
+          effect={effect} 
+          onComplete={() => handleEffectComplete(effect.id)}
+        />
       ))}
-      
-      {/* Flying limb fragments */}
-      {limbFragments.map((limb) => (
-        <group key={limb.id} position={limb.position} rotation={[limb.rotation.x, limb.rotation.y, limb.rotation.z]}>
-          {limb.type === 'arm' && (
-            <mesh>
-              <boxGeometry args={[0.15, 0.8, 0.15]} />
-              <meshLambertMaterial color="#8B4513" />
-            </mesh>
-          )}
-          {limb.type === 'leg' && (
-            <mesh>
-              <boxGeometry args={[0.2, 1, 0.2]} />
-              <meshLambertMaterial color="#8B4513" />
-            </mesh>
-          )}
-          {limb.type === 'head' && (
-            <mesh>
-              <sphereGeometry args={[0.3, 8, 8]} />
-              <meshLambertMaterial color="#D2691E" />
-            </mesh>
-          )}
-          {limb.type === 'torso' && (
-            <mesh>
-              <boxGeometry args={[0.6, 1.2, 0.4]} />
-              <meshLambertMaterial color="#8B4513" />
-            </mesh>
-          )}
-        </group>
-      ))}
+    </>
+  );
+}
 
-      {/* Weapon-specific effects */}
-      {weaponType === 'flamethrower' && (
-        <mesh>
-          <sphereGeometry args={[1.5, 16, 16]} />
+function WeaponImpactEffect({ effect, onComplete }: { 
+  effect: ImpactEffect; 
+  onComplete: () => void;
+}) {
+  const [showBlood, setShowBlood] = useState(true);
+  const [showLimbs, setShowLimbs] = useState(false);
+  const [showExplosion, setShowExplosion] = useState(false);
+
+  useEffect(() => {
+    // Determine which effects to show based on weapon type
+    const shouldShowLimbs = ['shotgun', 'rocket', 'nuke'].includes(effect.weaponType);
+    const shouldShowExplosion = ['rocket', 'nuke'].includes(effect.weaponType);
+
+    if (shouldShowLimbs) {
+      setTimeout(() => setShowLimbs(true), 100);
+    }
+    
+    if (shouldShowExplosion) {
+      setTimeout(() => setShowExplosion(true), 50);
+    }
+
+    // Auto-cleanup after all effects complete
+    const timeout = setTimeout(() => {
+      onComplete();
+    }, getEffectDuration(effect.weaponType));
+
+    return () => clearTimeout(timeout);
+  }, [effect, onComplete]);
+
+  const getEffectDuration = (weaponType: string): number => {
+    switch (weaponType) {
+      case 'pistol': return 3000;
+      case 'shotgun': return 5000;
+      case 'flamethrower': return 4000;
+      case 'rocket': return 8000;
+      case 'nuke': return 12000;
+      default: return 3000;
+    }
+  };
+
+  const getBloodIntensity = (): number => {
+    switch (effect.weaponType) {
+      case 'pistol': return 0.5;
+      case 'shotgun': return 1.5;
+      case 'flamethrower': return 0.8;
+      case 'rocket': return 2.0;
+      case 'nuke': return 3.0;
+      default: return 1.0;
+    }
+  };
+
+  const getExplosionForce = (): number => {
+    switch (effect.weaponType) {
+      case 'shotgun': return 1.2;
+      case 'rocket': return 2.5;
+      case 'nuke': return 4.0;
+      default: return 1.0;
+    }
+  };
+
+  return (
+    <>
+      {/* Blood splatter effect */}
+      {showBlood && (
+        <BloodSplatter 
+          position={effect.position}
+          intensity={getBloodIntensity() * effect.intensity}
+          onComplete={() => setShowBlood(false)}
+        />
+      )}
+      
+      {/* Flying limbs for powerful weapons */}
+      {showLimbs && (
+        <FlyingLimbs 
+          position={effect.position}
+          explosionForce={getExplosionForce() * effect.intensity}
+          onComplete={() => setShowLimbs(false)}
+        />
+      )}
+      
+      {/* Explosion effect for rockets and nukes */}
+      {showExplosion && (
+        <ExplosionEffect 
+          position={effect.position}
+          weaponType={effect.weaponType}
+          intensity={effect.intensity}
+          onComplete={() => setShowExplosion(false)}
+        />
+      )}
+    </>
+  );
+}
+
+function ExplosionEffect({ 
+  position, 
+  weaponType, 
+  intensity, 
+  onComplete 
+}: { 
+  position: THREE.Vector3; 
+  weaponType: string; 
+  intensity: number;
+  onComplete: () => void;
+}) {
+  useEffect(() => {
+    const duration = weaponType === 'nuke' ? 6000 : 3000;
+    const timeout = setTimeout(onComplete, duration);
+    return () => clearTimeout(timeout);
+  }, [weaponType, onComplete]);
+
+  const getExplosionColor = () => {
+    switch (weaponType) {
+      case 'rocket': return '#FF4500';
+      case 'nuke': return '#00FF00';
+      default: return '#FF6600';
+    }
+  };
+
+  const getExplosionSize = () => {
+    switch (weaponType) {
+      case 'rocket': return 2 * intensity;
+      case 'nuke': return 5 * intensity;
+      default: return 1 * intensity;
+    }
+  };
+
+  return (
+    <group position={position}>
+      {/* Main explosion sphere */}
+      <mesh>
+        <sphereGeometry args={[getExplosionSize(), 16, 16]} />
+        <meshBasicMaterial 
+          color={getExplosionColor()} 
+          transparent 
+          opacity={0.8}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+      
+      {/* Outer shockwave */}
+      <mesh scale={[2, 2, 2]}>
+        <sphereGeometry args={[getExplosionSize(), 12, 12]} />
+        <meshBasicMaterial 
+          color={getExplosionColor()} 
+          transparent 
+          opacity={0.3}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+      
+      {/* Nuclear glow for nuke */}
+      {weaponType === 'nuke' && (
+        <mesh scale={[4, 4, 4]}>
+          <sphereGeometry args={[getExplosionSize(), 8, 8]} />
           <meshBasicMaterial 
-            color="#FF4500" 
+            color="#00FF00" 
             transparent 
-            opacity={0.4}
+            opacity={0.1}
             blending={THREE.AdditiveBlending}
           />
         </mesh>
-      )}
-
-      {(weaponType === 'rocket' || weaponType === 'nuke') && (
-        <>
-          {/* Explosion shockwave */}
-          <mesh scale={[weaponType === 'nuke' ? 8 : 4, weaponType === 'nuke' ? 8 : 4, weaponType === 'nuke' ? 8 : 4]}>
-            <sphereGeometry args={[1, 16, 16]} />
-            <meshBasicMaterial 
-              color={weaponType === 'nuke' ? "#00FF00" : "#FF8C00"} 
-              transparent 
-              opacity={0.2}
-              blending={THREE.AdditiveBlending}
-            />
-          </mesh>
-          
-          {/* Central blast */}
-          <mesh scale={[2, 2, 2]}>
-            <sphereGeometry args={[0.5, 16, 16]} />
-            <meshBasicMaterial 
-              color="#FFFFFF" 
-              transparent 
-              opacity={0.8}
-              blending={THREE.AdditiveBlending}
-            />
-          </mesh>
-        </>
       )}
     </group>
   );

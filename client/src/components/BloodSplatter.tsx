@@ -1,91 +1,121 @@
-import { useRef, useMemo } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
-interface BloodSplatterProps {
+interface BloodParticle {
+  id: string;
   position: THREE.Vector3;
-  intensity: number;
-  active: boolean;
+  velocity: THREE.Vector3;
+  size: number;
+  life: number;
+  maxLife: number;
+  color: THREE.Color;
 }
 
-export function BloodSplatter({ position, intensity, active }: BloodSplatterProps) {
-  const groupRef = useRef<THREE.Group>(null);
-  const startTime = useRef(0);
+interface BloodSplatterProps {
+  position: THREE.Vector3;
+  intensity?: number;
+  onComplete?: () => void;
+}
 
-  // Create multiple blood droplet meshes
-  const bloodDroplets = useMemo(() => {
-    if (!active) return [];
-    
-    const droplets = [];
-    const count = intensity * 15;
-    
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2;
-      const distance = 0.5 + Math.random() * 2;
-      const height = Math.random() * 3;
-      
-      droplets.push({
-        id: i,
-        initialPosition: new THREE.Vector3(
-          Math.cos(angle) * distance,
-          height,
-          Math.sin(angle) * distance
-        ),
+export function BloodSplatter({ position, intensity = 1, onComplete }: BloodSplatterProps) {
+  const [particles, setParticles] = useState<BloodParticle[]>([]);
+  const groupRef = useRef<THREE.Group>(null);
+  const particleId = useRef(0);
+
+  useEffect(() => {
+    // Create blood particles on mount
+    const newParticles: BloodParticle[] = [];
+    const particleCount = Math.floor(20 * intensity);
+
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
+      const speed = 3 + Math.random() * 4;
+      const upwardForce = 2 + Math.random() * 3;
+
+      newParticles.push({
+        id: `blood_${particleId.current++}`,
+        position: position.clone(),
         velocity: new THREE.Vector3(
-          Math.cos(angle) * (2 + Math.random() * 3),
-          2 + Math.random() * 4,
-          Math.sin(angle) * (2 + Math.random() * 3)
+          Math.cos(angle) * speed,
+          upwardForce,
+          Math.sin(angle) * speed
         ),
-        size: 0.05 + Math.random() * 0.1
+        size: 0.05 + Math.random() * 0.1,
+        life: 0,
+        maxLife: 2 + Math.random() * 2,
+        color: new THREE.Color().setHSL(0, 0.8 + Math.random() * 0.2, 0.2 + Math.random() * 0.3)
       });
     }
-    
-    return droplets;
-  }, [active, intensity]);
 
-  useFrame((state) => {
-    if (!active || !groupRef.current) return;
+    setParticles(newParticles);
 
-    if (startTime.current === 0) {
-      startTime.current = state.clock.elapsedTime;
-    }
+    // Auto-cleanup after animation
+    const timeout = setTimeout(() => {
+      onComplete?.();
+    }, 4000);
 
-    const elapsed = state.clock.elapsedTime - startTime.current;
-    
-    if (elapsed > 2) return;
+    return () => clearTimeout(timeout);
+  }, [position, intensity, onComplete]);
 
-    // Update droplet positions with gravity
-    groupRef.current.children.forEach((child, index) => {
-      if (index < bloodDroplets.length) {
-        const droplet = bloodDroplets[index];
-        const t = elapsed;
+  useFrame((state, delta) => {
+    setParticles(prev => {
+      const updated = prev.map(particle => {
+        const newParticle = { ...particle };
         
-        child.position.copy(droplet.initialPosition);
-        child.position.x += droplet.velocity.x * t;
-        child.position.y += droplet.velocity.y * t - 4.9 * t * t; // Gravity
-        child.position.z += droplet.velocity.z * t;
+        // Update position with velocity
+        newParticle.position.add(
+          newParticle.velocity.clone().multiplyScalar(delta)
+        );
         
-        // Fade out
-        const material = (child as THREE.Mesh).material as THREE.MeshBasicMaterial;
-        material.opacity = Math.max(0, 1 - elapsed / 2);
-      }
+        // Apply gravity
+        newParticle.velocity.y -= 9.8 * delta;
+        
+        // Add air resistance
+        newParticle.velocity.multiplyScalar(0.98);
+        
+        // Update life
+        newParticle.life += delta;
+        
+        return newParticle;
+      }).filter(particle => particle.life < particle.maxLife);
+      
+      return updated;
     });
   });
 
-  if (!active) return null;
-
   return (
-    <group ref={groupRef} position={position}>
-      {bloodDroplets.map((droplet) => (
-        <mesh key={droplet.id} position={droplet.initialPosition}>
-          <sphereGeometry args={[droplet.size, 6, 6]} />
-          <meshBasicMaterial 
-            color="#8B0000" 
-            transparent 
-            opacity={0.8}
-          />
-        </mesh>
+    <group ref={groupRef}>
+      {particles.map(particle => (
+        <BloodParticleVisual key={particle.id} particle={particle} />
       ))}
     </group>
+  );
+}
+
+function BloodParticleVisual({ particle }: { particle: BloodParticle }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+
+  useFrame(() => {
+    if (meshRef.current) {
+      meshRef.current.position.copy(particle.position);
+      
+      // Fade out over time
+      const alpha = 1 - (particle.life / particle.maxLife);
+      if (meshRef.current.material instanceof THREE.MeshBasicMaterial) {
+        meshRef.current.material.opacity = alpha;
+      }
+    }
+  });
+
+  return (
+    <mesh ref={meshRef}>
+      <sphereGeometry args={[particle.size, 6, 6]} />
+      <meshBasicMaterial 
+        color={particle.color} 
+        transparent 
+        opacity={1}
+      />
+    </mesh>
   );
 }
