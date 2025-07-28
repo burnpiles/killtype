@@ -33,11 +33,6 @@ export function TypingInterface() {
               if ((window as any).triggerWeaponFire) {
                 (window as any).triggerWeaponFire();
               }
-              if ((window as any).fireProjectile) {
-                const direction = new THREE.Vector3(0, 0, -1); // Forward direction
-                const startPos = new THREE.Vector3(1.2, -2.8, -0.5); // Weapon position
-                (window as any).fireProjectile(startPos, direction, 'pistol');
-              }
             }
           }, 50);
         }

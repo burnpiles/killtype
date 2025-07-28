@@ -4,8 +4,6 @@ import { useGLTF } from "@react-three/drei";
 import { Mesh, Group } from "three";
 import * as THREE from "three";
 import { ParticleSystem } from "./ParticleSystem";
-import { ExplosionEffect } from "./ExplosionEffect";
-import { BloodSplatter } from "./BloodSplatter";
 import { WordPrompt } from "./WordPrompt";
 import { useZombieGame } from "../lib/stores/useZombieGame";
 
@@ -176,21 +174,29 @@ export function Zombie({ zombie }: ZombieProps) {
         />
       )}
       
-      {/* Spectacular Blood Splatter Effects */}
+      {/* Simple visual feedback effects without WebGL buffer issues */}
       {bloodSplatterActive && (
-        <BloodSplatter
-          position={zombie.position}
-          intensity={1.5}
-          onComplete={() => setBloodSplatterActive(false)}
-        />
+        <mesh position={zombie.position}>
+          <sphereGeometry args={[0.3, 8, 8]} />
+          <meshBasicMaterial 
+            color="#8B0000" 
+            transparent 
+            opacity={0.6}
+          />
+        </mesh>
       )}
 
-      {/* Spectacular Explosion Effect when zombie dies */}
-      <ExplosionEffect
-        position={zombie.position}
-        active={explosionActive}
-        onComplete={() => setExplosionActive(false)}
-      />
+      {/* Simple explosion effect */}
+      {explosionActive && (
+        <mesh position={zombie.position}>
+          <sphereGeometry args={[0.5, 8, 8]} />
+          <meshBasicMaterial 
+            color="#FF4500" 
+            transparent 
+            opacity={0.4}
+          />
+        </mesh>
+      )}
       
       {/* Death explosion for rocket launcher */}
       {zombie.animationState === 'dying' && zombie.hitEffect?.type === 'rocket' && (

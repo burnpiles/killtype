@@ -5,8 +5,6 @@ import { useAudio } from "../lib/stores/useAudio";
 import { Zombie } from "./Zombie";
 import { Environment } from "./Environment";
 import { WeaponDisplay } from "./WeaponDisplay";
-import { ProjectileSystem } from "./ProjectileSystem";
-import { WeaponImpactSystem } from "./WeaponImpactSystem";
 import { TypingInterface } from "./TypingInterface";
 import { HUD } from "./HUD";
 import { WeaponSystem } from "./WeaponSystem";
@@ -63,11 +61,7 @@ export function Game() {
       {/* Visible weapon on screen */}
       <WeaponDisplay />
       
-      {/* Realistic projectile effects */}
-      <ProjectileSystem />
-      
-      {/* Spectacular weapon impact effects */}
-      <WeaponImpactSystem impacts={[]} />
+      {/* Simple visual effects without buffer issues */}
       
       <WeaponSystem />
     </>
