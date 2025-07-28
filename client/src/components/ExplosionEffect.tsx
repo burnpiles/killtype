@@ -72,7 +72,7 @@ export function ExplosionEffect({ position, active, onComplete }: ExplosionEffec
   }, []);
 
   useFrame((state, delta) => {
-    if (!active || !particlesRef.current) return;
+    if (!active) return;
 
     if (explosionStartTime.current === 0) {
       explosionStartTime.current = state.clock.elapsedTime;
@@ -86,58 +86,55 @@ export function ExplosionEffect({ position, active, onComplete }: ExplosionEffec
       return;
     }
 
-    // Update particle positions
-    const positions = particlesRef.current.geometry.attributes.position.array as Float32Array;
-    const velocities = particlesRef.current.geometry.attributes.velocity.array as Float32Array;
-    const particleCount = positions.length / 3;
-
-    for (let i = 0; i < particleCount; i++) {
-      const i3 = i * 3;
-      
-      // Apply velocity with gravity
-      positions[i3] += velocities[i3] * delta;
-      positions[i3 + 1] += velocities[i3 + 1] * delta - 9.8 * delta * elapsedTime; // Gravity
-      positions[i3 + 2] += velocities[i3 + 2] * delta;
-      
-      // Apply air resistance
-      velocities[i3] *= 0.99;
-      velocities[i3 + 1] *= 0.99;
-      velocities[i3 + 2] *= 0.99;
-    }
-
-    // Fade out over time
+    // Simple visual fade without buffer updates
     const fadeProgress = elapsedTime / explosionDuration;
     explosionMaterial.opacity = Math.max(0, 0.8 * (1 - fadeProgress));
-
-    particlesRef.current.geometry.attributes.position.needsUpdate = true;
   });
 
   if (!active) return null;
 
   return (
     <group ref={groupRef} position={position}>
-      {/* Main explosion particles */}
-      <points ref={particlesRef} geometry={explosionGeometry} material={explosionMaterial} />
+      {/* Simple explosion effects without complex particles */}
       
       {/* Explosion flash */}
       <mesh>
-        <sphereGeometry args={[1, 16, 16]} />
+        <sphereGeometry args={[2, 16, 16]} />
         <meshBasicMaterial 
           color="#ffaa00" 
           transparent 
-          opacity={0.6}
+          opacity={0.8}
           blending={THREE.AdditiveBlending}
         />
       </mesh>
       
-      {/* Smoke cloud */}
-      <mesh scale={[2, 2, 2]}>
-        <planeGeometry args={[1, 1]} />
+      {/* Outer blast wave */}
+      <mesh scale={[4, 4, 4]}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshBasicMaterial 
+          color="#ff6600" 
+          transparent 
+          opacity={0.3}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+      
+      {/* Smoke clouds */}
+      <mesh scale={[3, 3, 3]} position={[0, 1, 0]}>
+        <sphereGeometry args={[0.5, 8, 8]} />
         <meshBasicMaterial 
           color="#333333" 
           transparent 
+          opacity={0.4}
+        />
+      </mesh>
+      
+      <mesh scale={[2, 2, 2]} position={[1, 0.5, 1]}>
+        <sphereGeometry args={[0.7, 8, 8]} />
+        <meshBasicMaterial 
+          color="#666666" 
+          transparent 
           opacity={0.3}
-          side={THREE.DoubleSide}
         />
       </mesh>
     </group>

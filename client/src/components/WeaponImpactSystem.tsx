@@ -89,55 +89,35 @@ export function WeaponImpactSystem({ position, weaponType, active, onComplete }:
     }
   }, [generateImpactEffects]);
 
-  // Blood splatter particles
-  const bloodParticles = useMemo(() => {
-    if (!active) return null;
-
-    const geometry = new THREE.BufferGeometry();
-    const particleCount = weaponType === 'nuke' ? 500 : weaponType === 'rocket' ? 300 : 150;
-    const positions = new Float32Array(particleCount * 3);
-    const velocities = new Float32Array(particleCount * 3);
-    const colors = new Float32Array(particleCount * 3);
-
-    for (let i = 0; i < particleCount; i++) {
-      const i3 = i * 3;
+  // Simple blood effect spheres instead of complex particles
+  const bloodSpheres = useMemo(() => {
+    if (!active) return [];
+    
+    const spheres = [];
+    const count = weaponType === 'nuke' ? 20 : weaponType === 'rocket' ? 15 : 8;
+    
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const distance = 1 + Math.random() * 2;
       
-      positions[i3] = 0;
-      positions[i3 + 1] = 0;
-      positions[i3 + 2] = 0;
-      
-      // Blood spray pattern
-      const phi = Math.random() * Math.PI * 2;
-      const theta = Math.random() * Math.PI;
-      const speed = 3 + Math.random() * 8;
-      
-      velocities[i3] = Math.sin(theta) * Math.cos(phi) * speed;
-      velocities[i3 + 1] = Math.cos(theta) * speed * 0.5;
-      velocities[i3 + 2] = Math.sin(theta) * Math.sin(phi) * speed;
-      
-      // Dark red blood colors
-      const redIntensity = 0.5 + Math.random() * 0.5;
-      colors[i3] = redIntensity;
-      colors[i3 + 1] = Math.random() * 0.1;
-      colors[i3 + 2] = Math.random() * 0.1;
+      spheres.push({
+        id: i,
+        position: new THREE.Vector3(
+          Math.cos(angle) * distance,
+          Math.random() * 2,
+          Math.sin(angle) * distance
+        ),
+        velocity: new THREE.Vector3(
+          Math.cos(angle) * (3 + Math.random() * 5),
+          2 + Math.random() * 4,
+          Math.sin(angle) * (3 + Math.random() * 5)
+        ),
+        size: 0.05 + Math.random() * 0.1
+      });
     }
-
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    return geometry;
+    
+    return spheres;
   }, [active, weaponType]);
-
-  const bloodMaterial = useMemo(() => {
-    return new THREE.PointsMaterial({
-      size: 0.1,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.8,
-      blending: THREE.NormalBlending
-    });
-  }, []);
 
   useFrame((state, delta) => {
     if (!active) return;
@@ -176,36 +156,21 @@ export function WeaponImpactSystem({ position, weaponType, active, onComplete }:
       };
     }));
 
-    // Update blood particles
-    if (bloodParticles && groupRef.current) {
-      const positions = bloodParticles.attributes.position.array as Float32Array;
-      const velocities = bloodParticles.attributes.velocity.array as Float32Array;
-      const particleCount = positions.length / 3;
-
-      for (let i = 0; i < particleCount; i++) {
-        const i3 = i * 3;
-        
-        positions[i3] += velocities[i3] * delta;
-        positions[i3 + 1] += velocities[i3 + 1] * delta - 9.8 * delta * elapsedTime;
-        positions[i3 + 2] += velocities[i3 + 2] * delta;
-        
-        velocities[i3] *= 0.99;
-        velocities[i3 + 1] *= 0.99;
-        velocities[i3 + 2] *= 0.99;
-      }
-
-      bloodParticles.attributes.position.needsUpdate = true;
-    }
+    // Update blood sphere positions with simple physics
+    // No buffer attribute updates needed - just visual effects
   });
 
   if (!active) return null;
 
   return (
     <group ref={groupRef} position={position}>
-      {/* Blood spray particles */}
-      {bloodParticles && (
-        <points geometry={bloodParticles} material={bloodMaterial} />
-      )}
+      {/* Blood spray spheres */}
+      {bloodSpheres.map((sphere) => (
+        <mesh key={sphere.id} position={sphere.position}>
+          <sphereGeometry args={[sphere.size, 6, 6]} />
+          <meshBasicMaterial color="#8B0000" transparent opacity={0.8} />
+        </mesh>
+      ))}
       
       {/* Flying limb fragments */}
       {limbFragments.map((limb) => (
