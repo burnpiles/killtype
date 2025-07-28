@@ -175,11 +175,15 @@ export const useZombieGame = create<ZombieGameState>()(
         
         // Update current word to match the closest zombie's word
         const closestZombie = zombiesWithTarget.find(z => z.health > 0);
-        const newCurrentWord = closestZombie ? closestZombie.targetWord : state.currentWord;
+        const newCurrentWord = closestZombie ? closestZombie.targetWord : '';
+        
+        // Reset typing progress if we switched to a new target
+        const shouldResetIndex = newCurrentWord !== state.currentWord;
         
         return {
           zombies: zombiesWithTarget,
-          currentWord: newCurrentWord
+          currentWord: newCurrentWord,
+          currentIndex: shouldResetIndex ? 0 : state.currentIndex
         };
       });
     },
@@ -246,13 +250,18 @@ export const useZombieGame = create<ZombieGameState>()(
               return true;
             });
             
+            // Find the next target after killing current one
+            const remainingZombies = updatedZombies.filter(z => z.health > 0);
+            const nextTarget = remainingZombies.sort((a, b) => a.distanceToPlayer - b.distanceToPlayer)[0];
+            
             set({
               currentIndex: 0,
               missedShot: false,
               score: state.score + wordScore,
               streak: newStreak,
               lastWordTime: now,
-              zombies: updatedZombies
+              zombies: updatedZombies,
+              currentWord: nextTarget ? nextTarget.targetWord : ''
             });
           }
           

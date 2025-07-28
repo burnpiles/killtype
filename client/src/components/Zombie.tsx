@@ -4,6 +4,7 @@ import { Mesh, Group } from "three";
 import * as THREE from "three";
 import { ParticleSystem } from "./ParticleSystem";
 import { WordPrompt } from "./WordPrompt";
+import { useZombieGame } from "../lib/stores/useZombieGame";
 
 interface ZombieProps {
   zombie: {
@@ -35,6 +36,7 @@ export function Zombie({ zombie }: ZombieProps) {
   const weaponRef = useRef<Mesh>(null);
   
   const [animationTime, setAnimationTime] = useState(0);
+  const { currentIndex } = useZombieGame();
 
   // Advanced animation system
   useFrame((state, delta) => {
@@ -230,7 +232,7 @@ export function Zombie({ zombie }: ZombieProps) {
         word={zombie.targetWord}
         position={zombie.position}
         isTargeted={zombie.isTargeted}
-        currentIndex={0} // We'll need to get this from the game state
+        currentIndex={zombie.isTargeted ? currentIndex : 0}
         isCompleted={zombie.animationState === 'dead'}
       />
     </group>
