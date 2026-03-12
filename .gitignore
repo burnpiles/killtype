@@ -7,3 +7,5 @@ vite.config.ts.*
 .config/
 *.log
 lt_subdomain.txt
+.env*
+!.env.example

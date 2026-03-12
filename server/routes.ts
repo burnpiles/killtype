@@ -1,5 +1,4 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import {
   insertLeaderboardScoreSchema,
@@ -7,7 +6,7 @@ import {
   leaderboardQualificationSchema,
 } from "@shared/schema";
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export async function registerRoutes(app: Express): Promise<void> {
   // prefix all routes with /api
 
   app.get("/api/leaderboard", async (_req, res) => {
@@ -62,7 +61,4 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  const httpServer = createServer(app);
-
-  return httpServer;
 }

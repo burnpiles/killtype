@@ -1,0 +1,9 @@
+{
+  "buildCommand": "vite build",
+  "outputDirectory": "dist/public",
+  "functions": {
+    "api/[...all].ts": {
+      "runtime": "nodejs20.x"
+    }
+  }
+}

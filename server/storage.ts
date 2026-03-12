@@ -1,4 +1,5 @@
 import {
+  leaderboardScores,
   leaderboardDifficultyValues,
   type InsertLeaderboardScore,
   type InsertUser,
@@ -7,6 +8,8 @@ import {
   type LeaderboardScore,
   type User,
 } from "@shared/schema";
+import { asc, desc, eq, inArray } from "drizzle-orm";
+import { db } from "./db";
 
 export const LEADERBOARD_LIMIT = 10;
 
@@ -77,10 +80,32 @@ export class MemStorage implements IStorage {
   }
 
   async getLeaderboard(difficulty: LeaderboardDifficulty): Promise<LeaderboardScore[]> {
+    if (db) {
+      return db
+        .select()
+        .from(leaderboardScores)
+        .where(eq(leaderboardScores.difficulty, difficulty))
+        .orderBy(
+          desc(leaderboardScores.score),
+          desc(leaderboardScores.wpm),
+          desc(leaderboardScores.accuracyPct),
+          asc(leaderboardScores.createdAt),
+        )
+        .limit(LEADERBOARD_LIMIT);
+    }
     return [...this.leaderboardScores[difficulty]];
   }
 
   async getAllLeaderboards(): Promise<LeaderboardMap> {
+    if (db) {
+      const boards = await Promise.all(
+        leaderboardDifficultyValues.map(async (difficulty) => [
+          difficulty,
+          await this.getLeaderboard(difficulty),
+        ] as const),
+      );
+      return Object.fromEntries(boards) as LeaderboardMap;
+    }
     return {
       easy: [...this.leaderboardScores.easy],
       normal: [...this.leaderboardScores.normal],
@@ -90,7 +115,7 @@ export class MemStorage implements IStorage {
   }
 
   async qualifiesForLeaderboard(entry: LeaderboardQualificationRequest): Promise<LeaderboardQualificationResult> {
-    const board = this.leaderboardScores[entry.difficulty];
+    const board = await this.getLeaderboard(entry.difficulty);
     const previewEntry = {
       id: -1,
       username: "preview",
@@ -114,6 +139,42 @@ export class MemStorage implements IStorage {
   }
 
   async createLeaderboardScore(entry: InsertLeaderboardScore): Promise<LeaderboardScore & { rank: number }> {
+    if (db) {
+      const [created] = await db
+        .insert(leaderboardScores)
+        .values({
+          username: entry.username,
+          score: entry.score,
+          difficulty: entry.difficulty,
+          wpm: entry.wpm,
+          accuracyPct: entry.accuracyPct,
+          createdAt: Date.now(),
+        })
+        .returning();
+
+      const fullBoard = await db
+        .select()
+        .from(leaderboardScores)
+        .where(eq(leaderboardScores.difficulty, entry.difficulty))
+        .orderBy(
+          desc(leaderboardScores.score),
+          desc(leaderboardScores.wpm),
+          desc(leaderboardScores.accuracyPct),
+          asc(leaderboardScores.createdAt),
+        );
+
+      const trimmed = fullBoard.slice(0, LEADERBOARD_LIMIT);
+      const overflow = fullBoard.slice(LEADERBOARD_LIMIT);
+      if (overflow.length > 0) {
+        await db
+          .delete(leaderboardScores)
+          .where(inArray(leaderboardScores.id, overflow.map(score => score.id)));
+      }
+
+      const rank = trimmed.findIndex(existing => existing.id === created.id) + 1;
+      return { ...created, rank };
+    }
+
     const createdAt = Date.now();
     const score: LeaderboardScore = {
       id: this.leaderboardCurrentId++,
