@@ -1,6 +1,6 @@
 import express, { type Request, type Response, type NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { log } from "./vite";
+import { log } from "./log";
 
 export async function createApp() {
   const app = express();
