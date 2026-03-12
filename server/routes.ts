@@ -1,10 +1,10 @@
 import type { Express } from "express";
-import { storage } from "./storage";
+import { storage } from "./storage.js";
 import {
   insertLeaderboardScoreSchema,
   leaderboardDifficultySchema,
   leaderboardQualificationSchema,
-} from "@shared/schema";
+} from "../shared/schema.js";
 
 export async function registerRoutes(app: Express): Promise<void> {
   // prefix all routes with /api

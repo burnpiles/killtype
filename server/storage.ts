@@ -7,9 +7,9 @@ import {
   type LeaderboardQualificationRequest,
   type LeaderboardScore,
   type User,
-} from "@shared/schema";
+} from "../shared/schema.js";
 import { asc, desc, eq, inArray } from "drizzle-orm";
-import { db } from "./db";
+import { db } from "./db.js";
 
 export const LEADERBOARD_LIMIT = 10;
 
