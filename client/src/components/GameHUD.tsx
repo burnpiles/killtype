@@ -1,3 +1,4 @@
+import React from "react";
 import { useZombieGame } from "../lib/stores/useZombieGame";
 
 export function GameHUD() {

@@ -1,21 +1,62 @@
-import { users, type User, type InsertUser } from "@shared/schema";
+import {
+  leaderboardDifficultyValues,
+  type InsertLeaderboardScore,
+  type InsertUser,
+  type LeaderboardDifficulty,
+  type LeaderboardQualificationRequest,
+  type LeaderboardScore,
+  type User,
+} from "@shared/schema";
 
-// modify the interface with any CRUD methods
-// you might need
+export const LEADERBOARD_LIMIT = 10;
+
+type LeaderboardMap = Record<LeaderboardDifficulty, LeaderboardScore[]>;
+type LeaderboardQualificationResult = {
+  qualifies: boolean;
+  rank: number | null;
+  limit: number;
+  totalEntries: number;
+  lowestScore: number | null;
+};
+
+const buildEmptyLeaderboards = (): LeaderboardMap => ({
+  easy: [],
+  normal: [],
+  hard: [],
+  extreme: [],
+});
+
+const compareLeaderboardScores = (
+  a: Pick<LeaderboardScore, "score" | "wpm" | "accuracyPct" | "createdAt">,
+  b: Pick<LeaderboardScore, "score" | "wpm" | "accuracyPct" | "createdAt">,
+) => {
+  if (b.score !== a.score) return b.score - a.score;
+  if (b.wpm !== a.wpm) return b.wpm - a.wpm;
+  if (b.accuracyPct !== a.accuracyPct) return b.accuracyPct - a.accuracyPct;
+  return a.createdAt - b.createdAt;
+};
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  getLeaderboard(difficulty: LeaderboardDifficulty): Promise<LeaderboardScore[]>;
+  getAllLeaderboards(): Promise<LeaderboardMap>;
+  qualifiesForLeaderboard(entry: LeaderboardQualificationRequest): Promise<LeaderboardQualificationResult>;
+  createLeaderboardScore(entry: InsertLeaderboardScore): Promise<LeaderboardScore & { rank: number }>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<number, User>;
+  private leaderboardScores: LeaderboardMap;
   currentId: number;
+  leaderboardCurrentId: number;
 
   constructor() {
     this.users = new Map();
+    this.leaderboardScores = buildEmptyLeaderboards();
     this.currentId = 1;
+    this.leaderboardCurrentId = 1;
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -33,6 +74,64 @@ export class MemStorage implements IStorage {
     const user: User = { ...insertUser, id };
     this.users.set(id, user);
     return user;
+  }
+
+  async getLeaderboard(difficulty: LeaderboardDifficulty): Promise<LeaderboardScore[]> {
+    return [...this.leaderboardScores[difficulty]];
+  }
+
+  async getAllLeaderboards(): Promise<LeaderboardMap> {
+    return {
+      easy: [...this.leaderboardScores.easy],
+      normal: [...this.leaderboardScores.normal],
+      hard: [...this.leaderboardScores.hard],
+      extreme: [...this.leaderboardScores.extreme],
+    };
+  }
+
+  async qualifiesForLeaderboard(entry: LeaderboardQualificationRequest): Promise<LeaderboardQualificationResult> {
+    const board = this.leaderboardScores[entry.difficulty];
+    const previewEntry = {
+      id: -1,
+      username: "preview",
+      score: entry.score,
+      difficulty: entry.difficulty,
+      wpm: entry.wpm,
+      accuracyPct: entry.accuracyPct,
+      createdAt: Date.now(),
+    };
+    const ranked = [...board, previewEntry]
+      .sort(compareLeaderboardScores);
+    const rank = ranked.findIndex(score => score.id === -1) + 1;
+
+    return {
+      qualifies: board.length < LEADERBOARD_LIMIT || rank <= LEADERBOARD_LIMIT,
+      rank: rank > 0 ? rank : null,
+      limit: LEADERBOARD_LIMIT,
+      totalEntries: board.length,
+      lowestScore: board.length > 0 ? board[board.length - 1].score : null,
+    };
+  }
+
+  async createLeaderboardScore(entry: InsertLeaderboardScore): Promise<LeaderboardScore & { rank: number }> {
+    const createdAt = Date.now();
+    const score: LeaderboardScore = {
+      id: this.leaderboardCurrentId++,
+      username: entry.username,
+      score: entry.score,
+      difficulty: entry.difficulty,
+      wpm: entry.wpm,
+      accuracyPct: entry.accuracyPct,
+      createdAt,
+    };
+
+    const board = [...this.leaderboardScores[entry.difficulty], score]
+      .sort(compareLeaderboardScores)
+      .slice(0, LEADERBOARD_LIMIT);
+    this.leaderboardScores[entry.difficulty] = board;
+
+    const rank = board.findIndex(existing => existing.id === score.id) + 1;
+    return { ...score, rank };
   }
 }
 

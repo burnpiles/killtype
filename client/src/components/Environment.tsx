@@ -1,224 +1,245 @@
+import React, { useMemo, useRef } from "react";
 import { useTexture } from "@react-three/drei";
-import { useMemo } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
 export function Environment() {
-  const woodTexture = useTexture("/textures/wood.jpg");
-  const sandTexture = useTexture("/textures/sand.jpg");
+  const ambientRef = useRef<THREE.AmbientLight>(null);
   
-  // Configure textures for indoor horror atmosphere
-  woodTexture.wrapS = woodTexture.wrapT = THREE.RepeatWrapping;
-  woodTexture.repeat.set(8, 8);
-  
-  sandTexture.wrapS = sandTexture.wrapT = THREE.RepeatWrapping;
-  sandTexture.repeat.set(12, 12);
+  // Load available textures
+  const [
+    asphaltTexture,
+    grassTexture,
+    sandTexture,
+    skyTexture,
+    woodTexture
+  ] = useTexture([
+    "/textures/asphalt.png",
+    "/textures/grass.png",
+    "/textures/sand.jpg",
+    "/textures/sky.png",
+    "/textures/wood.jpg"
+  ]);
 
-  // Pre-calculate positions for industrial horror environment
-  const pillarsPositions = useMemo(() => {
-    const positions = [];
-    // Create a grid of support pillars like in the image
-    for (let x = -15; x <= 15; x += 10) {
-      for (let z = -15; z <= 5; z += 10) {
-        if (Math.abs(x) > 5 || z < -5) { // Don't block center area
-          positions.push({ x, z });
-        }
+  // Configure textures with proper tiling
+  useMemo(() => {
+    asphaltTexture.wrapS = asphaltTexture.wrapT = THREE.RepeatWrapping;
+    asphaltTexture.repeat.set(4, 4);
+    
+    grassTexture.wrapS = grassTexture.wrapT = THREE.RepeatWrapping;
+    grassTexture.repeat.set(2, 2);
+    
+    sandTexture.wrapS = sandTexture.wrapT = THREE.RepeatWrapping;
+    sandTexture.repeat.set(6, 6);
+    
+    woodTexture.wrapS = woodTexture.wrapT = THREE.RepeatWrapping;
+    woodTexture.repeat.set(3, 3);
+  }, [asphaltTexture, grassTexture, sandTexture, woodTexture]);
+
+  // Dynamic atmospheric effects
+  useFrame((state) => {
+    if (ambientRef.current) {
+      // Subtle ambient light pulsing for tension
+      ambientRef.current.intensity = 0.15 + Math.sin(state.clock.elapsedTime * 0.5) * 0.05;
+    }
+  });
+
+  // Generate facility elements (pillars, doorways, debris)
+  const facilityElements = useMemo(() => {
+    const elements = [];
+    
+    // Create pillars
+    for (let i = 0; i < 12; i++) {
+      const x = (Math.random() - 0.5) * 40;
+      const z = (Math.random() - 0.5) * 40;
+      if (Math.abs(x) > 8 || Math.abs(z) > 8) { // Keep center clear
+        elements.push({
+          type: 'pillar',
+          position: [x, 3, z],
+          key: `pillar-${i}`
+        });
       }
     }
-    return positions;
-  }, []);
-
-  const ventPositions = useMemo(() => {
-    const positions = [];
+    
+    // Create debris piles
     for (let i = 0; i < 8; i++) {
-      positions.push({
-        x: (Math.random() - 0.5) * 30,
-        z: -10 - Math.random() * 15,
-        y: 8 + Math.random() * 2,
-        rotation: Math.random() * Math.PI * 2
-      });
+      const x = (Math.random() - 0.5) * 35;
+      const z = (Math.random() - 0.5) * 35;
+      if (Math.abs(x) > 6 || Math.abs(z) > 6) {
+        elements.push({
+          type: 'debris',
+          position: [x, 0.5, z],
+          key: `debris-${i}`
+        });
+      }
     }
-    return positions;
+    
+    return elements;
   }, []);
 
   return (
     <>
-      {/* Industrial warehouse floor */}
+      {/* Atmospheric fog */}
+      <fog attach="fog" args={["#1a1a1a", 10, 50]} />
+      
+      {/* Dynamic ambient lighting */}
+      <ambientLight ref={ambientRef} intensity={0.2} color="#666666" />
+      
+      {/* Main directional light (emergency lighting) */}
+      <directionalLight
+        position={[10, 20, 10]}
+        intensity={0.8}
+        color="#ff6666"
+        castShadow
+        shadow-mapSize-width={4096}
+        shadow-mapSize-height={4096}
+        shadow-camera-far={50}
+        shadow-camera-left={-25}
+        shadow-camera-right={25}
+        shadow-camera-top={25}
+        shadow-camera-bottom={-25}
+      />
+      
+      {/* Emergency red point lights */}
+      <pointLight position={[-15, 8, -15]} intensity={1.2} color="#ff0000" distance={20} />
+      <pointLight position={[15, 8, 15]} intensity={1.2} color="#ff0000" distance={20} />
+      <pointLight position={[-15, 8, 15]} intensity={1.2} color="#ff0000" distance={20} />
+      <pointLight position={[15, 8, -15]} intensity={1.2} color="#ff0000" distance={20} />
+      
+      {/* Flickering fluorescent lights */}
+      <rectAreaLight
+        position={[0, 10, 0]}
+        width={30}
+        height={2}
+        intensity={0.6}
+        color="#cccccc"
+      />
+      
+      {/* Underground facility floor */}
       <mesh position={[0, -2, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[50, 50]} />
+        <planeGeometry args={[60, 60]} />
         <meshStandardMaterial 
-          map={sandTexture} 
-          color="#444444"
+          map={asphaltTexture}
           roughness={0.9}
           metalness={0.1}
         />
       </mesh>
       
-      {/* Concrete ceiling with industrial look */}
-      <mesh position={[0, 12, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[50, 50]} />
+      {/* Stains and wear on floor */}
+      <mesh position={[0, -1.98, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[60, 60]} />
         <meshStandardMaterial 
-          color="#2a2a2a"
-          roughness={0.8}
-          metalness={0.2}
+          map={sandTexture}
+          transparent
+          opacity={0.4}
+          color="#8B4513"
         />
       </mesh>
       
-      {/* Back wall with industrial detailing */}
-      <mesh position={[0, 5, -25]} receiveShadow>
-        <planeGeometry args={[50, 14]} />
+      {/* Industrial ceiling */}
+      <mesh position={[0, 12, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[60, 60]} />
         <meshStandardMaterial 
           map={woodTexture}
-          color="#3a3a3a"
-          roughness={0.7}
-          metalness={0.3}
+          roughness={0.4}
+          metalness={0.6}
+          color="#2a2a2a"
         />
       </mesh>
       
-      {/* Left wall */}
-      <mesh position={[-25, 5, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[50, 14]} />
+      {/* Facility walls */}
+      <mesh position={[30, 5, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
+        <planeGeometry args={[60, 14]} />
         <meshStandardMaterial 
-          color="#3a3a3a"
-          roughness={0.7}
-          metalness={0.3}
+          map={asphaltTexture}
+          roughness={0.8}
+          metalness={0.2}
+          color="#404040"
         />
       </mesh>
       
-      {/* Right wall */}
-      <mesh position={[25, 5, 0]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[50, 14]} />
+      <mesh position={[-30, 5, 0]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+        <planeGeometry args={[60, 14]} />
         <meshStandardMaterial 
-          color="#3a3a3a"
-          roughness={0.7}
-          metalness={0.3}
+          map={asphaltTexture}
+          roughness={0.8}
+          metalness={0.2}
+          color="#404040"
         />
       </mesh>
       
-      {/* Industrial support pillars */}
-      {pillarsPositions.map((pos, i) => (
-        <group key={i} position={[pos.x, 0, pos.z]}>
-          {/* Main pillar */}
-          <mesh castShadow receiveShadow>
-            <boxGeometry args={[1.5, 12, 1.5]} />
-            <meshStandardMaterial 
-              color="#555555"
-              roughness={0.8}
-              metalness={0.4}
-            />
-          </mesh>
+      <mesh position={[0, 5, 30]} rotation={[0, Math.PI, 0]} receiveShadow>
+        <planeGeometry args={[60, 14]} />
+        <meshStandardMaterial 
+          map={asphaltTexture}
+          roughness={0.8}
+          metalness={0.2}
+          color="#404040"
+        />
+      </mesh>
+      
+      <mesh position={[0, 5, -30]} receiveShadow>
+        <planeGeometry args={[60, 14]} />
+        <meshStandardMaterial 
+          map={asphaltTexture}
+          roughness={0.8}
+          metalness={0.2}
+          color="#404040"
+        />
+      </mesh>
+      
+      {/* Facility elements */}
+      {facilityElements.map(element => (
+        <group key={element.key}>
+          {element.type === 'pillar' && (
+            <mesh position={element.position as [number, number, number]} castShadow receiveShadow>
+              <cylinderGeometry args={[0.8, 1.2, 6, 8]} />
+              <meshStandardMaterial 
+                map={woodTexture}
+                roughness={0.7}
+                metalness={0.3}
+                color="#555555"
+              />
+            </mesh>
+          )}
           
-          {/* Pillar reinforcement rings */}
-          <mesh position={[0, 2, 0]} castShadow>
-            <cylinderGeometry args={[0.9, 0.9, 0.3, 8]} />
-            <meshStandardMaterial color="#666666" metalness={0.6} />
-          </mesh>
-          <mesh position={[0, 6, 0]} castShadow>
-            <cylinderGeometry args={[0.9, 0.9, 0.3, 8]} />
-            <meshStandardMaterial color="#666666" metalness={0.6} />
-          </mesh>
-          <mesh position={[0, 10, 0]} castShadow>
-            <cylinderGeometry args={[0.9, 0.9, 0.3, 8]} />
-            <meshStandardMaterial color="#666666" metalness={0.6} />
-          </mesh>
+          {element.type === 'debris' && (
+            <mesh position={element.position as [number, number, number]} castShadow>
+              <boxGeometry args={[
+                1 + Math.random(),
+                0.3 + Math.random() * 0.7,
+                1 + Math.random()
+              ]} />
+              <meshStandardMaterial 
+                map={sandTexture}
+                roughness={0.9}
+                metalness={0.1}
+                color="#654321"
+              />
+            </mesh>
+          )}
         </group>
       ))}
       
-      {/* Ceiling ventilation ducts */}
-      {ventPositions.map((pos, i) => (
-        <group key={i} position={[pos.x, pos.y, pos.z]} rotation={[0, pos.rotation, 0]}>
-          <mesh>
-            <cylinderGeometry args={[0.8, 0.8, 8, 8]} />
-            <meshStandardMaterial 
-              color="#777777"
-              roughness={0.3}
-              metalness={0.8}
-            />
-          </mesh>
-          
-          {/* Vent grilles */}
-          <mesh position={[0, -4.2, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[0.3, 0.7, 8]} />
-            <meshStandardMaterial color="#333333" />
-          </mesh>
-        </group>
-      ))}
-      
-      {/* Industrial lighting fixtures */}
-      <mesh position={[0, 10, -15]} castShadow>
-        <boxGeometry args={[8, 0.5, 1]} />
-        <meshStandardMaterial color="#222222" />
-      </mesh>
-      <mesh position={[-10, 10, 0]} castShadow>
-        <boxGeometry args={[1, 0.5, 8]} />
-        <meshStandardMaterial color="#222222" />
-      </mesh>
-      <mesh position={[10, 10, 0]} castShadow>
-        <boxGeometry args={[1, 0.5, 8]} />
-        <meshStandardMaterial color="#222222" />
+      {/* Atmospheric particle effects */}
+      <mesh position={[10, 8, -15]}>
+        <sphereGeometry args={[0.5, 16, 16]} />
+        <meshBasicMaterial 
+          color="#666666"
+          transparent
+          opacity={0.1}
+        />
       </mesh>
       
-      {/* Broken glass window frames on back wall */}
-      <mesh position={[-8, 8, -24.8]}>
-        <boxGeometry args={[4, 3, 0.2]} />
-        <meshStandardMaterial color="#1a1a1a" />
+      {/* Volumetric lighting shafts */}
+      <mesh position={[0, 6, 0]} rotation={[0, 0, 0]}>
+        <coneGeometry args={[8, 12, 32]} />
+        <meshBasicMaterial 
+          color="#cccccc"
+          transparent
+          opacity={0.02}
+        />
       </mesh>
-      <mesh position={[8, 8, -24.8]}>
-        <boxGeometry args={[4, 3, 0.2]} />
-        <meshStandardMaterial color="#1a1a1a" />
-      </mesh>
-      
-      {/* Horror atmosphere lighting - dim and moody */}
-      <ambientLight intensity={0.1} color="#404040" />
-      
-      {/* Main harsh fluorescent lighting */}
-      <rectAreaLight
-        position={[0, 9, -15]}
-        width={8}
-        height={1}
-        intensity={2}
-        color="#e6f3ff"
-      />
-      
-      <rectAreaLight
-        position={[-10, 9, 0]}
-        width={1}
-        height={8}
-        intensity={1.5}
-        color="#e6f3ff"
-      />
-      
-      <rectAreaLight
-        position={[10, 9, 0]}
-        width={1}
-        height={8}
-        intensity={1.5}
-        color="#e6f3ff"
-      />
-      
-      {/* Dramatic spot lighting for zombie encounters */}
-      <spotLight
-        position={[0, 8, -5]}
-        intensity={1}
-        angle={Math.PI / 3}
-        penumbra={0.3}
-        color="#ffffff"
-        castShadow
-      />
-      
-      {/* Emergency lighting - red glow */}
-      <pointLight 
-        position={[-20, 10, -20]} 
-        intensity={0.3} 
-        color="#ff3333"
-        distance={15}
-      />
-      
-      <pointLight 
-        position={[20, 10, -20]} 
-        intensity={0.3} 
-        color="#ff3333"
-        distance={15}
-      />
     </>
   );
 }

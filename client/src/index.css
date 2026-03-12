@@ -3,12 +3,42 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --background: 220 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 220 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 220 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 220 9% 9%;
+    --secondary: 220 3% 11%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 220 3% 11%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 220 3% 11%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 3% 11%;
+    --input: 220 3% 11%;
+    --ring: 142.1 76.2% 36.3%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --radius: 0.5rem;
+  }
+
   * {
-    @apply border-border;
+    @apply border-gray-800;
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased;
+    background: #0a0a0a;
+    color: #ffffff;
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -67,4 +97,88 @@ body {
   0% { background-color: transparent; }
   50% { background-color: rgba(0, 255, 0, 0.2); }
   100% { background-color: transparent; }
+}
+
+/* POLISHED MENU ANIMATIONS */
+@keyframes menuFadeIn {
+  0% { 
+    opacity: 0; 
+    backdrop-filter: blur(0px);
+  }
+  100% { 
+    opacity: 1; 
+    backdrop-filter: blur(12px);
+  }
+}
+
+@keyframes menuSlideIn {
+  0% { 
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  100% { 
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes menuButtonSlide {
+  0% { 
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes float {
+  0%, 100% { 
+    transform: translateY(0px) rotate(0deg); 
+    opacity: 0.1;
+  }
+  25% { 
+    transform: translateY(-15px) rotate(90deg); 
+    opacity: 0.15;
+  }
+  50% { 
+    transform: translateY(-30px) rotate(180deg); 
+    opacity: 0.1;
+  }
+  75% { 
+    transform: translateY(-15px) rotate(270deg); 
+    opacity: 0.05;
+  }
+}
+
+@keyframes flash {
+  0%, 90% { 
+    opacity: 0;
+  }
+  95% { 
+    opacity: 0.3;
+    transform: scaleY(1.5);
+  }
+  100% { 
+    opacity: 0;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { 
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.6;
+    transform: scale(1.05);
+  }
 }
