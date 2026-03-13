@@ -311,7 +311,7 @@ export function ZombieTypingGame() {
       style={{
         gridTemplateColumns: `repeat(${PIXEL_HEART[0].length}, ${pixelSize}px)`,
         gridAutoRows: `${pixelSize}px`,
-        gap: 1,
+        gap: pixelSize <= 2 ? 0.5 : 1,
       }}
     >
       {PIXEL_HEART.flatMap((row, rowIndex) =>
@@ -400,6 +400,7 @@ export function ZombieTypingGame() {
   const [menuScreen, setMenuScreen] = useState<MenuScreen>('home');
   const [isCompactDevice, setIsCompactDevice] = useState(false);
   const [desktopNoticeDismissed, setDesktopNoticeDismissed] = useState(false);
+  const [mobileHudExpanded, setMobileHudExpanded] = useState(false);
   const [viewportMetrics, setViewportMetrics] = useState(() => ({
     width: typeof window !== 'undefined' ? window.innerWidth : 390,
     height: typeof window !== 'undefined' ? window.innerHeight : 844,
@@ -453,8 +454,13 @@ export function ZombieTypingGame() {
   };
 
   const isTouchLayout = isMobile || isCompactDevice;
+  const keyboardInset = Math.max(0, viewportMetrics.height - viewportMetrics.visualHeight);
+  const keyboardVisible = isTouchLayout && keyboardInset > 140;
   const mobileCanvasWidth = Math.max(320, Math.min(viewportMetrics.width - 12, 520));
-  const mobileCanvasHeight = Math.max(360, Math.min(viewportMetrics.visualHeight - 260, 760));
+  const mobileUiReserve = keyboardVisible
+    ? (mobileHudExpanded ? 280 : 150)
+    : (mobileHudExpanded ? 360 : 210);
+  const mobileCanvasHeight = Math.max(220, Math.min(viewportMetrics.visualHeight - mobileUiReserve, 760));
   const CANVAS_WIDTH = isTouchLayout ? mobileCanvasWidth : 1200;
   const CANVAS_HEIGHT = isTouchLayout ? mobileCanvasHeight : 800;
   const GAME_AREA = isTouchLayout
@@ -750,6 +756,12 @@ export function ZombieTypingGame() {
     }
   }, [focusTypingInput, gameState.gameStarted, isTouchLayout]);
 
+  useEffect(() => {
+    if (keyboardVisible) {
+      setMobileHudExpanded(false);
+    }
+  }, [keyboardVisible]);
+
   // (Boss helpers moved below getRandomWord declaration)
 
   // Play sound effect
@@ -1032,6 +1044,7 @@ export function ZombieTypingGame() {
       bossSpawnedAt: 0,
     }));
     setCurrentInput('');
+    setMobileHudExpanded(false);
     setMenuScreen('home');
     setLeaderboardTab(difficulty);
     setQualifyingResult(null);
@@ -1059,6 +1072,7 @@ export function ZombieTypingGame() {
       showMenu: false,
       menuAnimation: 0
     }));
+    setMobileHudExpanded(false);
     setMenuScreen('home');
     playSound(400, 0.5, 'sawtooth');
   }, [playSound]);
@@ -2611,12 +2625,18 @@ export function ZombieTypingGame() {
 
     // Targeting help text
     if (gameState.zombies.length > 0 && !gameState.zombies.some(z => z.isTargeted)) {
-      ctx.font = 'bold 18px monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = '#ffffff';
       ctx.shadowBlur = 8;
-      ctx.fillText('Type the first letter of the highlighted word to target!', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 30);
+      if (isTouchLayout) {
+        ctx.font = 'bold 11px monospace';
+        ctx.fillText('Type the first letter', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 44);
+        ctx.fillText('of the highlighted word to target!', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 26);
+      } else {
+        ctx.font = 'bold 18px monospace';
+        ctx.fillText('Type the first letter of the highlighted word to target!', CANVAS_WIDTH / 2, CANVAS_HEIGHT - 30);
+      }
       ctx.shadowBlur = 0;
     }
 
@@ -3034,7 +3054,7 @@ export function ZombieTypingGame() {
   const activeWeaponBehavior = WEAPON_BEHAVIOR[gameState.currentWeapon as keyof typeof WEAPON_BEHAVIOR] ?? WEAPON_BEHAVIOR.pistol;
 
   const containerClass = isTouchLayout
-    ? "flex flex-col items-center justify-start bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 px-2 pb-3"
+    ? "flex flex-col items-center justify-start bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 px-2 pb-2 overflow-hidden"
     : "flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4";
 
   const gameCanvas = (
@@ -3057,7 +3077,10 @@ export function ZombieTypingGame() {
   );
 
   return (
-    <div className={containerClass} style={isTouchLayout ? { minHeight: `${viewportMetrics.visualHeight}px` } : undefined}>
+    <div
+      className={containerClass}
+      style={isTouchLayout ? { height: `${viewportMetrics.visualHeight}px`, maxHeight: `${viewportMetrics.visualHeight}px` } : undefined}
+    >
       {/* Hidden input for mobile soft keyboard */}
       {isTouchLayout && (
         <input
@@ -3081,94 +3104,136 @@ export function ZombieTypingGame() {
           }}
         />
       )}
-      {/* Clean Menu Button */}
+      {/* Branded Menu Button */}
       <button
-        onClick={toggleMenu}
-        className={`fixed top-4 right-4 z-40 bg-white hover:bg-gray-50 text-gray-700 rounded-2xl font-semibold shadow-lg border border-gray-200 transform hover:scale-105 transition-all duration-200 active:scale-95 ${isTouchLayout ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`}
+        onClick={() => {
+          playButtonClick();
+          toggleMenu();
+        }}
+        onMouseEnter={() => playButtonHover()}
+        className={`fixed top-4 right-4 z-40 border-2 rounded-lg font-mono tracking-[0.18em] transform hover:scale-105 transition-all duration-200 active:scale-95 overflow-hidden ${isTouchLayout ? 'px-3 py-2 text-[10px]' : 'px-4 py-3 text-xs'}`}
         style={{
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
+          color: '#00ffff',
+          borderColor: '#00ffff',
+          background: 'linear-gradient(145deg, rgba(2, 10, 20, 0.96), rgba(8, 22, 38, 0.94))',
+          boxShadow: `
+            0 0 18px rgba(0, 255, 255, 0.35),
+            inset 0 0 18px rgba(0, 255, 255, 0.08),
+            0 3px 0 rgba(0, 120, 120, 0.8)
+          `,
+          textShadow: '0 0 10px rgba(0, 255, 255, 0.85)'
         }}
       >
-        <div className="flex items-center gap-2">
-          <span className="text-lg">⚙️</span>
-          <span>Menu</span>
+        <div
+          className="absolute inset-0 opacity-20 pointer-events-none"
+          style={{
+            background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255, 255, 255, 0.06) 2px, rgba(255, 255, 255, 0.06) 4px)'
+          }}
+        />
+        <div className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-amber-400 pointer-events-none" style={{ boxShadow: '0 0 8px #ffaa00' }} />
+        <div className="absolute bottom-1.5 right-1.5 w-2 h-2 rounded-full bg-cyan-400 pointer-events-none animate-pulse" style={{ boxShadow: '0 0 8px #00ffff' }} />
+        <div className="relative flex items-center">
+          <span>MENU</span>
         </div>
       </button>
 
       {isTouchLayout ? (
-        <div className="w-full max-w-[520px] pt-16 flex flex-col items-center gap-2">
-          <div className="w-full grid grid-cols-4 gap-2">
-            {[
-              { label: 'SCORE', value: gameState.score.toLocaleString(), color: '#facc15' },
-              { label: 'KILLS', value: String(gameState.kills), color: '#22d3ee' },
-              { label: 'WPM', value: String(gameState.wpm), color: '#22d3ee' },
-              { label: 'ACC', value: `${Math.round(gameState.accuracyPct)}%`, color: '#ffffff' },
-            ].map((item) => (
-              <div key={item.label} className="rounded-lg border bg-black/70 px-2 py-2 text-center" style={{ borderColor: '#1f3952' }}>
-                <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">{item.label}</div>
-                <div className="mt-1 text-xs font-mono font-bold" style={{ color: item.color }}>{item.value}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="w-full rounded-lg border bg-black/70 px-3 py-2" style={{ borderColor: '#1f3952' }}>
-            <div className="flex items-center justify-between gap-3 text-[10px] font-mono tracking-[0.18em] text-slate-400">
-              <span>{bossStatus}</span>
-              <span style={{ color: difficultyTextColor[gameState.difficulty] }}>{gameState.difficulty.toUpperCase()}</span>
-            </div>
-            <div className="mt-2 h-2 rounded-full border" style={{ borderColor: '#2a3b4f' }}>
-              <div className="h-full rounded-full bg-cyan-500" style={{ width: `${bossProgress * 100}%` }} />
-            </div>
-          </div>
-
-          <div className="w-full grid grid-cols-[1.15fr_0.85fr_1fr] gap-2">
-            <div className="rounded-lg border bg-black/70 px-3 py-2" style={{ borderColor: '#1f3952' }}>
-              <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">WEAPON</div>
-              <div className="mt-1 text-xs font-mono font-bold text-white">{activeWeaponName}</div>
-              <div className="mt-1 text-[10px] font-mono text-slate-300">DMG {activeWeaponDamage} • {activeWeaponBehavior.label.toUpperCase()}</div>
-              {gameState.currentWeapon !== 'pistol' && (
-                <div className="mt-1 text-[10px] font-mono text-slate-300">
-                  {gameState.weaponAmmo > 0 ? `AMMO ${gameState.weaponAmmo}` : `TIME ${Math.ceil(gameState.weaponTimeLeft / 1000)}s`}
+        <div className={`w-full max-w-[520px] flex flex-col items-center gap-2 ${keyboardVisible ? 'pt-14' : 'pt-16'}`}>
+          <div className="w-full rounded-lg border bg-black/70 overflow-hidden" style={{ borderColor: '#1f3952' }}>
+            <button
+              className="w-full px-3 py-2 flex items-center justify-between gap-3 text-left"
+              onClick={() => setMobileHudExpanded(prev => !prev)}
+            >
+              <div>
+                <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">LIVES</div>
+                <div className="mt-2 flex items-center gap-1">
+                  {Array.from({ length: MAX_LIVES }, (_, i) => (
+                    <div key={i}>{renderPixelHeart(i < gameState.lives, 1.5)}</div>
+                  ))}
                 </div>
-              )}
-            </div>
-            <div className="rounded-lg border bg-black/70 px-3 py-2" style={{ borderColor: '#1f3952' }}>
-              <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">CHAPTER</div>
-              <div className="mt-1 text-xs font-mono font-bold text-amber-300">{gameState.level}</div>
-            </div>
-            <div className="rounded-lg border bg-black/70 px-3 py-2" style={{ borderColor: '#1f3952' }}>
-              <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">LIVES</div>
-              <div className="mt-2 flex items-center justify-start gap-1">
-                {Array.from({ length: MAX_LIVES }, (_, i) => (
-                  <div key={i}>{renderPixelHeart(i < gameState.lives, 2)}</div>
-                ))}
               </div>
-            </div>
+              <div className="text-right">
+                <div className="text-[9px] font-mono tracking-[0.18em] text-slate-500">
+                  {mobileHudExpanded ? 'HIDE HUD' : 'SHOW HUD'}
+                </div>
+                <div className="mt-1 text-lg font-mono text-cyan-300">
+                  {mobileHudExpanded ? '−' : '+'}
+                </div>
+              </div>
+            </button>
+
+            {mobileHudExpanded && (
+              <div className="border-t px-3 py-3 space-y-2" style={{ borderColor: '#1f3952' }}>
+                <div className="w-full grid grid-cols-4 gap-2">
+                  {[
+                    { label: 'SCORE', value: gameState.score.toLocaleString(), color: '#facc15' },
+                    { label: 'KILLS', value: String(gameState.kills), color: '#22d3ee' },
+                    { label: 'WPM', value: String(gameState.wpm), color: '#22d3ee' },
+                    { label: 'ACC', value: `${Math.round(gameState.accuracyPct)}%`, color: '#ffffff' },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-lg border bg-black/60 px-2 py-2 text-center" style={{ borderColor: '#1f3952' }}>
+                      <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">{item.label}</div>
+                      <div className="mt-1 text-xs font-mono font-bold" style={{ color: item.color }}>{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="w-full rounded-lg border bg-black/60 px-3 py-2" style={{ borderColor: '#1f3952' }}>
+                  <div className="flex items-center justify-between gap-3 text-[10px] font-mono tracking-[0.18em] text-slate-400">
+                    <span>{bossStatus}</span>
+                    <span style={{ color: difficultyTextColor[gameState.difficulty] }}>{gameState.difficulty.toUpperCase()}</span>
+                  </div>
+                  <div className="mt-2 h-2 rounded-full border" style={{ borderColor: '#2a3b4f' }}>
+                    <div className="h-full rounded-full bg-cyan-500" style={{ width: `${bossProgress * 100}%` }} />
+                  </div>
+                </div>
+
+                <div className="w-full grid grid-cols-[1.25fr_0.75fr] gap-2">
+                  <div className="rounded-lg border bg-black/60 px-3 py-2" style={{ borderColor: '#1f3952' }}>
+                    <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">WEAPON</div>
+                    <div className="mt-1 text-xs font-mono font-bold text-white">{activeWeaponName}</div>
+                    <div className="mt-1 text-[10px] font-mono text-slate-300">DMG {activeWeaponDamage} • {activeWeaponBehavior.label.toUpperCase()}</div>
+                    {gameState.currentWeapon !== 'pistol' && (
+                      <div className="mt-1 text-[10px] font-mono text-slate-300">
+                        {gameState.weaponAmmo > 0 ? `AMMO ${gameState.weaponAmmo}` : `TIME ${Math.ceil(gameState.weaponTimeLeft / 1000)}s`}
+                      </div>
+                    )}
+                  </div>
+                  <div className="rounded-lg border bg-black/60 px-3 py-2" style={{ borderColor: '#1f3952' }}>
+                    <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">CHAPTER</div>
+                    <div className="mt-1 text-xs font-mono font-bold text-amber-300">{gameState.level}</div>
+                  </div>
+                </div>
+
+                <div className="w-full rounded-lg border bg-black/60 px-3 py-2" style={{ borderColor: '#1f3952' }}>
+                  <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">LEGEND</div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    {[
+                      { label: 'normal', border: '#22324a', dash: 'solid' },
+                      { label: 'target', border: '#00ffff', dash: 'dashed' },
+                      { label: 'special', border: '#ff00aa', dash: 'dashed' },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex-1 rounded bg-[#0b1320] px-2 py-1 text-center text-[10px] font-mono text-white"
+                        style={{ border: `1px ${item.dash} ${item.border}` }}
+                      >
+                        {item.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="w-full" onPointerDown={() => focusTypingInput()}>
+          <div className="w-full flex-1 min-h-0" onPointerDown={() => focusTypingInput()}>
             {gameCanvas}
           </div>
 
-          <div className="w-full rounded-lg border bg-black/70 px-3 py-2" style={{ borderColor: '#1f3952' }}>
-            <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">LEGEND</div>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              {[
-                { label: 'normal', border: '#22324a', dash: 'solid' },
-                { label: 'target', border: '#00ffff', dash: 'dashed' },
-                { label: 'special', border: '#ff00aa', dash: 'dashed' },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="flex-1 rounded bg-[#0b1320] px-2 py-1 text-center text-[10px] font-mono text-white"
-                  style={{ border: `1px ${item.dash} ${item.border}` }}
-                >
-                  {item.label}
-                </div>
-              ))}
-            </div>
+          <div className="w-full rounded-lg border bg-black/70 px-3 py-2 shrink-0" style={{ borderColor: '#1f3952' }}>
             <button
-              className="mt-3 w-full rounded-lg border px-3 py-2 text-xs font-mono text-cyan-300"
+              className="w-full rounded-lg border px-3 py-2 text-xs font-mono text-cyan-300"
               style={{ borderColor: '#00ffff', boxShadow: '0 0 14px rgba(0, 255, 255, 0.12)' }}
               onClick={() => focusTypingInput()}
             >
