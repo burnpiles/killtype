@@ -3254,35 +3254,32 @@ export function ZombieTypingGame() {
           </div>
 
           <div className="w-full rounded-lg border bg-black/70 px-3 py-2 shrink-0" style={{ borderColor: '#1f3952' }}>
-            <div className="relative">
-              <input
-                ref={mobileInputRef}
-                type="text"
-                inputMode="text"
-                autoCapitalize="none"
-                autoCorrect="off"
-                autoComplete="off"
-                spellCheck={false}
-                enterKeyHint="done"
-                className="absolute inset-0 z-10 opacity-[0.02]"
-                style={{ fontSize: 16 }}
-                onInput={(event) => {
-                  const value = event.currentTarget.value;
-                  const lastChar = value.slice(-1);
-                  if (lastChar) {
-                    window.dispatchEvent(new KeyboardEvent('keydown', { key: lastChar, bubbles: true }));
-                  }
-                  event.currentTarget.value = '';
-                }}
-              />
-              <button
-                className="w-full rounded-lg border px-3 py-2 text-xs font-mono text-cyan-300"
-                style={{ borderColor: '#00ffff', boxShadow: '0 0 14px rgba(0, 255, 255, 0.12)' }}
-                onClick={() => focusTypingInput()}
-              >
-                TAP HERE TO TYPE
-              </button>
-            </div>
+            <input
+              ref={mobileInputRef}
+              type="text"
+              inputMode="text"
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck={false}
+              enterKeyHint="done"
+              placeholder="TAP HERE TO TYPE"
+              className="w-full rounded-lg border px-3 py-2 text-xs font-mono text-center text-cyan-300 placeholder:text-cyan-300/90 bg-transparent focus:outline-none"
+              style={{
+                borderColor: '#00ffff',
+                boxShadow: '0 0 14px rgba(0, 255, 255, 0.12)',
+                fontSize: 16,
+              }}
+              onClick={() => focusTypingInput()}
+              onInput={(event) => {
+                const value = event.currentTarget.value;
+                const lastChar = value.slice(-1);
+                if (lastChar) {
+                  window.dispatchEvent(new KeyboardEvent('keydown', { key: lastChar, bubbles: true }));
+                }
+                event.currentTarget.value = '';
+              }}
+            />
           </div>
         </div>
       ) : (
