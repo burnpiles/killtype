@@ -5,6 +5,7 @@ import { flushSync } from 'react-dom';
 
 type Difficulty = 'easy' | 'normal' | 'hard' | 'extreme';
 type SpecialWeapon = 'grenade' | 'rocket' | 'machinegun' | 'bazooka' | 'nuke' | null;
+type MenuScreen = 'home' | 'leaderboard';
 
 // Boss/Progression
 export const BOSS_THRESHOLD: Record<Difficulty, number> = {
@@ -396,6 +397,14 @@ export function ZombieTypingGame() {
   const [highScoreName, setHighScoreName] = useState('');
   const [submittedHighScore, setSubmittedHighScore] = useState<(LeaderboardEntry & { rank: number }) | null>(null);
   const [submittingHighScore, setSubmittingHighScore] = useState(false);
+  const [menuScreen, setMenuScreen] = useState<MenuScreen>('home');
+  const [isCompactDevice, setIsCompactDevice] = useState(false);
+  const [desktopNoticeDismissed, setDesktopNoticeDismissed] = useState(false);
+  const [viewportMetrics, setViewportMetrics] = useState(() => ({
+    width: typeof window !== 'undefined' ? window.innerWidth : 390,
+    height: typeof window !== 'undefined' ? window.innerHeight : 844,
+    visualHeight: typeof window !== 'undefined' ? window.innerHeight : 844,
+  }));
   const activeSessionRef = useRef<{
     word: string;
     progress: number;
@@ -443,9 +452,14 @@ export function ZombieTypingGame() {
     );
   };
 
-  const CANVAS_WIDTH = 1200;
-  const CANVAS_HEIGHT = 800;
-  const GAME_AREA = { x: 200, y: 100, width: 800, height: 600 };
+  const isTouchLayout = isMobile || isCompactDevice;
+  const mobileCanvasWidth = Math.max(320, Math.min(viewportMetrics.width - 12, 520));
+  const mobileCanvasHeight = Math.max(360, Math.min(viewportMetrics.visualHeight - 260, 760));
+  const CANVAS_WIDTH = isTouchLayout ? mobileCanvasWidth : 1200;
+  const CANVAS_HEIGHT = isTouchLayout ? mobileCanvasHeight : 800;
+  const GAME_AREA = isTouchLayout
+    ? { x: 16, y: 58, width: CANVAS_WIDTH - 32, height: CANVAS_HEIGHT - 132 }
+    : { x: 200, y: 100, width: 800, height: 600 };
 
   // Initialize audio
   useEffect(() => {
@@ -456,7 +470,7 @@ export function ZombieTypingGame() {
   const getRandomWord = useCallback((difficulty: Difficulty) => {
     const wordSet = WORDS[difficulty];
     return wordSet[Math.floor(Math.random() * wordSet.length)];
-  }, []);
+  }, [GAME_AREA.height, GAME_AREA.width, GAME_AREA.x, GAME_AREA.y]);
 
   // --- Boss helpers ---
   const getBossPartPosition = useCallback((boss: BossState, part: BossPartName) => {
@@ -476,7 +490,7 @@ export function ZombieTypingGame() {
     x = Math.max(GAME_AREA.x + margin, Math.min(GAME_AREA.x + GAME_AREA.width - margin, x));
     y = Math.max(GAME_AREA.y + margin, Math.min(GAME_AREA.y + GAME_AREA.height - margin, y));
     return { x, y };
-  }, []);
+  }, [GAME_AREA.height, GAME_AREA.width, GAME_AREA.x, GAME_AREA.y]);
 
   const getNextBossPart = useCallback((boss: BossState) => {
     const order: BossPartName[] = ['head', 'leftHand', 'rightHand', 'leftFoot', 'rightFoot'];
@@ -678,12 +692,63 @@ export function ZombieTypingGame() {
       });
     }
   }, [getBossPartPosition, getNextBossPart, placeTagNearAnchor]);
+  useEffect(() => {
+    const compactViewport = window.matchMedia('(max-width: 1024px)');
+    const coarsePointer = window.matchMedia('(pointer: coarse)');
+    const updateCompactDevice = () => {
+      const isCompact = compactViewport.matches || coarsePointer.matches || window.innerWidth <= 1024;
+      setIsCompactDevice(isCompact);
+    };
+
+    updateCompactDevice();
+    compactViewport.addEventListener('change', updateCompactDevice);
+    coarsePointer.addEventListener('change', updateCompactDevice);
+    window.addEventListener('resize', updateCompactDevice);
+
+    return () => {
+      compactViewport.removeEventListener('change', updateCompactDevice);
+      coarsePointer.removeEventListener('change', updateCompactDevice);
+      window.removeEventListener('resize', updateCompactDevice);
+    };
+  }, []);
+
+  useEffect(() => {
+    const updateViewportMetrics = () => {
+      const visualViewport = window.visualViewport;
+      setViewportMetrics({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        visualHeight: Math.round(visualViewport?.height ?? window.innerHeight),
+      });
+    };
+
+    updateViewportMetrics();
+    window.addEventListener('resize', updateViewportMetrics);
+    window.visualViewport?.addEventListener('resize', updateViewportMetrics);
+
+    return () => {
+      window.removeEventListener('resize', updateViewportMetrics);
+      window.visualViewport?.removeEventListener('resize', updateViewportMetrics);
+    };
+  }, []);
+
+  const focusTypingInput = useCallback(() => {
+    if (!isTouchLayout) return;
+
+    requestAnimationFrame(() => {
+      mobileInputRef.current?.focus();
+    });
+    setTimeout(() => {
+      mobileInputRef.current?.focus();
+    }, 60);
+  }, [isTouchLayout]);
+
   // Ensure soft keyboard appears on mobile during gameplay
   useEffect(() => {
-    if (isMobile && gameState.gameStarted) {
-      mobileInputRef.current?.focus();
+    if (isTouchLayout && gameState.gameStarted) {
+      focusTypingInput();
     }
-  }, [isMobile, gameState.gameStarted]);
+  }, [focusTypingInput, gameState.gameStarted, isTouchLayout]);
 
   // (Boss helpers moved below getRandomWord declaration)
 
@@ -924,7 +989,7 @@ export function ZombieTypingGame() {
       difficulty,
       gameStarted: true,
       gameStartTime: Date.now(),
-      player: isMobile ? { x: CANVAS_WIDTH / 2, y: GAME_AREA.y + GAME_AREA.height - 40 } : { x: 600, y: 400 },
+      player: isTouchLayout ? { x: CANVAS_WIDTH / 2, y: GAME_AREA.y + GAME_AREA.height - 40 } : { x: 600, y: 400 },
       zombies: [],
       bullets: [],
       bloodStains: [],
@@ -967,13 +1032,14 @@ export function ZombieTypingGame() {
       bossSpawnedAt: 0,
     }));
     setCurrentInput('');
+    setMenuScreen('home');
     setLeaderboardTab(difficulty);
     setQualifyingResult(null);
     setHighScoreName('');
     setSubmittedHighScore(null);
     qualificationCheckedRef.current = '';
     activeBossPartRef.current = null;
-  }, [isMobile, CANVAS_WIDTH, GAME_AREA.y, GAME_AREA.height]);
+  }, [isTouchLayout, CANVAS_WIDTH, GAME_AREA.height, GAME_AREA.y]);
 
   // Menu actions
   const resumeGame = useCallback(() => {
@@ -993,6 +1059,7 @@ export function ZombieTypingGame() {
       showMenu: false,
       menuAnimation: 0
     }));
+    setMenuScreen('home');
     playSound(400, 0.5, 'sawtooth');
   }, [playSound]);
 
@@ -1059,7 +1126,7 @@ export function ZombieTypingGame() {
 
   // Create particles
   const createParticles = useCallback((x: number, y: number, type: Particle['type'], count: number = 10) => {
-    if (isMobile) {
+    if (isTouchLayout) {
       count = Math.max(2, Math.ceil(count * 0.6));
     }
     const particles: Particle[] = [];
@@ -1081,7 +1148,7 @@ export function ZombieTypingGame() {
       });
     }
     return particles;
-  }, [isMobile]);
+  }, [isTouchLayout]);
 
   const startBossSentencePhase = useCallback((state: GameState) => {
     state.boss.phase = 'sentence';
@@ -1172,7 +1239,7 @@ export function ZombieTypingGame() {
 
   // Create new zombie
   const createZombie = useCallback((): Zombie => {
-    const side = isMobile ? 0 : Math.floor(Math.random() * 4);
+    const side = isTouchLayout ? 0 : Math.floor(Math.random() * 4);
     let x, y;
     
     switch (side) {
@@ -1226,7 +1293,7 @@ export function ZombieTypingGame() {
       specialWeapon: getRandomSpecialWeapon(),
       behavior,
     };
-  }, [gameState.player, gameState.level, gameState.difficulty, getRandomWord, getRandomSpecialWeapon, isMobile]);
+  }, [gameState.player, gameState.level, gameState.difficulty, getRandomWord, getRandomSpecialWeapon, isTouchLayout]);
 
   // Draw zombie sprite with enhanced effects and collision-aware word tag
   const drawZombie = useCallback((ctx: CanvasRenderingContext2D, zombie: Zombie, placedRects?: Array<{x:number;y:number;w:number;h:number}>) => {
@@ -2361,31 +2428,6 @@ export function ZombieTypingGame() {
     });
     drawPlayer(ctx, gameState.player.x, gameState.player.y);
 
-    // Clean left HUD panel
-    const panelX = 20;
-    const panelY = 20;
-    const panelW = 160;
-    const panelH = 220;
-    ctx.fillStyle = '#07111d';
-    ctx.strokeStyle = '#1f3952';
-    ctx.lineWidth = 2;
-    ctx.fillRect(panelX, panelY, panelW, panelH);
-    ctx.strokeRect(panelX, panelY, panelW, panelH);
-
-    ctx.textAlign = 'left';
-    ctx.shadowBlur = 0;
-    const statLabel = (label: string, value: string, y: number, valueColor = '#e6e6e6') => {
-      ctx.font = 'bold 12px monospace';
-      ctx.fillStyle = '#8fb3c9';
-      ctx.fillText(label, panelX + 10, y);
-      ctx.font = 'bold 18px monospace';
-      ctx.fillStyle = valueColor;
-      ctx.fillText(value, panelX + 10, y + 18);
-    };
-
-    statLabel('SCORE', gameState.score.toLocaleString(), panelY + 16);
-    statLabel('KILLS', String(gameState.kills), panelY + 48, '#00e5ff');
-
     const threshold = BOSS_THRESHOLD[gameState.difficulty];
     const progress = Math.min(gameState.killsTowardsBoss / threshold, 1);
     const bossStatus = gameState.boss.active
@@ -2393,55 +2435,83 @@ export function ZombieTypingGame() {
       : gameState.gameTime < gameState.chapterTransitionUntil
         ? 'CHAPTER BREAK'
         : `BOSS IN ${Math.max(threshold - gameState.killsTowardsBoss, 0)}`;
-    ctx.font = 'bold 11px monospace';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(bossStatus, panelX + 10, panelY + 84);
-    const barX = panelX + 10, barY = panelY + 92, barW = panelW - 20, barH = 10;
-    ctx.strokeStyle = '#2a3b4f';
-    ctx.strokeRect(barX, barY, barW, barH);
-    ctx.fillStyle = '#007a99';
-    ctx.fillRect(barX, barY, barW * progress, barH);
 
-    const difficultyColors = { easy: '#00ff88', normal: '#ffaa00', hard: '#ff6666', extreme: '#ff00ff' };
-    ctx.font = 'bold 12px monospace';
-    ctx.fillStyle = '#8fb3c9';
-    ctx.fillText('LIVES', panelX + 10, panelY + 118);
-    for (let i = 0; i < MAX_LIVES; i++) {
-      drawPixelHeart(ctx, panelX + 10 + i * 22, panelY + 126, i < gameState.lives, 2);
-    }
-    statLabel('CHAPTER', String(gameState.level), panelY + 150, '#ffd54a');
-    statLabel('MODE', gameState.difficulty.toUpperCase(), panelY + 182, difficultyColors[gameState.difficulty]);
+    if (!isTouchLayout) {
+      // Clean left HUD panel
+      const panelX = 20;
+      const panelY = 20;
+      const panelW = 160;
+      const panelH = 220;
+      ctx.fillStyle = '#07111d';
+      ctx.strokeStyle = '#1f3952';
+      ctx.lineWidth = 2;
+      ctx.fillRect(panelX, panelY, panelW, panelH);
+      ctx.strokeRect(panelX, panelY, panelW, panelH);
 
-    const weaponName = gameState.currentWeapon === 'pistol' ? 'PISTOL' :
-      (gameState.currentWeapon in SPECIAL_WEAPONS ? SPECIAL_WEAPONS[gameState.currentWeapon as keyof typeof SPECIAL_WEAPONS].name : 'PISTOL');
-    const weaponDamage = WEAPON_DAMAGE[gameState.currentWeapon as keyof typeof WEAPON_DAMAGE] || 1;
-    const weaponBehavior = WEAPON_BEHAVIOR[gameState.currentWeapon as keyof typeof WEAPON_BEHAVIOR] ?? WEAPON_BEHAVIOR.pistol;
-    const weaponDisplayColor = gameState.currentWeapon === 'pistol' ? '#ffffff' :
-      (gameState.currentWeapon in SPECIAL_WEAPONS ? SPECIAL_WEAPONS[gameState.currentWeapon as keyof typeof SPECIAL_WEAPONS].color : '#ffffff');
+      ctx.textAlign = 'left';
+      ctx.shadowBlur = 0;
+      const statLabel = (label: string, value: string, y: number, valueColor = '#e6e6e6') => {
+        ctx.font = 'bold 12px monospace';
+        ctx.fillStyle = '#8fb3c9';
+        ctx.fillText(label, panelX + 10, y);
+        ctx.font = 'bold 18px monospace';
+        ctx.fillStyle = valueColor;
+        ctx.fillText(value, panelX + 10, y + 18);
+      };
 
-    const subBoxX = 20;
-    const weaponBoxY = panelY + panelH + 10;
-    const subBoxW = 160;
-    const subBoxH = 84;
-    ctx.fillStyle = '#0a0f1a';
-    ctx.strokeStyle = '#2a3b4f';
-    ctx.fillRect(subBoxX, weaponBoxY, subBoxW, subBoxH);
-    ctx.strokeRect(subBoxX, weaponBoxY, subBoxW, subBoxH);
-    ctx.font = 'bold 11px monospace';
-    ctx.fillStyle = '#8fb3c9';
-    ctx.fillText('WEAPON', subBoxX + 10, weaponBoxY + 16);
-    ctx.font = 'bold 18px monospace';
-    ctx.fillStyle = weaponDisplayColor;
-    ctx.fillText(weaponName.length > 11 ? weaponName.slice(0, 11) : weaponName, subBoxX + 10, weaponBoxY + 36);
-    ctx.font = 'bold 13px monospace';
-    ctx.fillStyle = '#e6e6e6';
-    ctx.fillText(`DMG ${weaponDamage}`, subBoxX + 10, weaponBoxY + 52);
-    ctx.fillStyle = '#8fb3c9';
-    ctx.fillText(`MODE ${weaponBehavior.label}`, subBoxX + 10, weaponBoxY + 68);
-    if (gameState.currentWeapon !== 'pistol') {
-      const ammoText = gameState.weaponAmmo > 0 ? `AMMO ${gameState.weaponAmmo}` : `TIME ${Math.ceil(gameState.weaponTimeLeft / 1000)}s`;
+      statLabel('SCORE', gameState.score.toLocaleString(), panelY + 16);
+      statLabel('KILLS', String(gameState.kills), panelY + 48, '#00e5ff');
+
+      ctx.font = 'bold 11px monospace';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(bossStatus, panelX + 10, panelY + 84);
+      const barX = panelX + 10, barY = panelY + 92, barW = panelW - 20, barH = 10;
+      ctx.strokeStyle = '#2a3b4f';
+      ctx.strokeRect(barX, barY, barW, barH);
+      ctx.fillStyle = '#007a99';
+      ctx.fillRect(barX, barY, barW * progress, barH);
+
+      const difficultyColors = { easy: '#00ff88', normal: '#ffaa00', hard: '#ff6666', extreme: '#ff00ff' };
+      ctx.font = 'bold 12px monospace';
+      ctx.fillStyle = '#8fb3c9';
+      ctx.fillText('LIVES', panelX + 10, panelY + 118);
+      for (let i = 0; i < MAX_LIVES; i++) {
+        drawPixelHeart(ctx, panelX + 10 + i * 22, panelY + 126, i < gameState.lives, 2);
+      }
+      statLabel('CHAPTER', String(gameState.level), panelY + 150, '#ffd54a');
+      statLabel('MODE', gameState.difficulty.toUpperCase(), panelY + 182, difficultyColors[gameState.difficulty]);
+
+      const weaponName = gameState.currentWeapon === 'pistol' ? 'PISTOL' :
+        (gameState.currentWeapon in SPECIAL_WEAPONS ? SPECIAL_WEAPONS[gameState.currentWeapon as keyof typeof SPECIAL_WEAPONS].name : 'PISTOL');
+      const weaponDamage = WEAPON_DAMAGE[gameState.currentWeapon as keyof typeof WEAPON_DAMAGE] || 1;
+      const weaponBehavior = WEAPON_BEHAVIOR[gameState.currentWeapon as keyof typeof WEAPON_BEHAVIOR] ?? WEAPON_BEHAVIOR.pistol;
+      const weaponDisplayColor = gameState.currentWeapon === 'pistol' ? '#ffffff' :
+        (gameState.currentWeapon in SPECIAL_WEAPONS ? SPECIAL_WEAPONS[gameState.currentWeapon as keyof typeof SPECIAL_WEAPONS].color : '#ffffff');
+
+      const subBoxX = 20;
+      const weaponBoxY = panelY + panelH + 10;
+      const subBoxW = 160;
+      const subBoxH = 84;
+      ctx.fillStyle = '#0a0f1a';
+      ctx.strokeStyle = '#2a3b4f';
+      ctx.fillRect(subBoxX, weaponBoxY, subBoxW, subBoxH);
+      ctx.strokeRect(subBoxX, weaponBoxY, subBoxW, subBoxH);
+      ctx.font = 'bold 11px monospace';
+      ctx.fillStyle = '#8fb3c9';
+      ctx.fillText('WEAPON', subBoxX + 10, weaponBoxY + 16);
+      ctx.font = 'bold 18px monospace';
+      ctx.fillStyle = weaponDisplayColor;
+      ctx.fillText(weaponName.length > 11 ? weaponName.slice(0, 11) : weaponName, subBoxX + 10, weaponBoxY + 36);
+      ctx.font = 'bold 13px monospace';
       ctx.fillStyle = '#e6e6e6';
-      ctx.fillText(ammoText, subBoxX + 10, weaponBoxY + 80);
+      ctx.fillText(`DMG ${weaponDamage}`, subBoxX + 10, weaponBoxY + 52);
+      ctx.fillStyle = '#8fb3c9';
+      ctx.fillText(`MODE ${weaponBehavior.label}`, subBoxX + 10, weaponBoxY + 68);
+      if (gameState.currentWeapon !== 'pistol') {
+        const ammoText = gameState.weaponAmmo > 0 ? `AMMO ${gameState.weaponAmmo}` : `TIME ${Math.ceil(gameState.weaponTimeLeft / 1000)}s`;
+        ctx.fillStyle = '#e6e6e6';
+        ctx.fillText(ammoText, subBoxX + 10, weaponBoxY + 80);
+      }
     }
     
     // Combo with dynamic effects
@@ -2455,56 +2525,52 @@ export function ZombieTypingGame() {
       ctx.fillText(`COMBO x${gameState.combo}`, CANVAS_WIDTH / 2, 54);
     }
     
-    // WPM / Accuracy display (right)
-    ctx.font = 'bold 18px monospace';
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#00e5ff';
-    ctx.fillText(`WPM: ${gameState.wpm}`, CANVAS_WIDTH - 30, 44);
-    ctx.font = 'bold 14px monospace';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(`ACC: ${Math.round(gameState.accuracyPct)}%`, CANVAS_WIDTH - 30, 64);
-
-    // Legend (left side under weapon)
-    const legendX = subBoxX;
-    const legendY = weaponBoxY + subBoxH + 12;
-    const rowH = 24;
-    const tagW = 62;
-    const tagH = 16;
-    ctx.textAlign = 'left';
-    ctx.font = 'bold 12px monospace';
-    ctx.fillStyle = '#0a0f1a';
-    ctx.strokeStyle = '#00ffff';
-    ctx.lineWidth = 2;
-    ctx.fillRect(legendX, legendY, subBoxW, rowH * 3 + 24);
-    ctx.strokeRect(legendX, legendY, subBoxW, rowH * 3 + 24);
-    ctx.fillStyle = '#8fb3c9';
-    ctx.fillText('LEGEND', legendX + 10, legendY + 15);
-    // Row helper
-    const drawTag = (x: number, y: number, style: 'normal' | 'target' | 'special') => {
-      // background
-      ctx.fillStyle = '#0b1320';
-      ctx.fillRect(x, y, tagW, tagH);
-      // border
-      if (style === 'special') { ctx.strokeStyle = '#ff00aa'; ctx.setLineDash([4,4]); }
-      else if (style === 'target') { ctx.strokeStyle = '#00ffff'; ctx.setLineDash([6,4]); }
-      else { ctx.strokeStyle = '#22324a'; ctx.setLineDash([]); }
-      ctx.strokeRect(x, y, tagW, tagH);
-      ctx.setLineDash([]);
-      ctx.font = 'bold 11px monospace';
-      ctx.textAlign = 'center';
+    if (!isTouchLayout) {
+      // WPM / Accuracy display (right)
+      ctx.font = 'bold 18px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#00e5ff';
+      ctx.fillText(`WPM: ${gameState.wpm}`, CANVAS_WIDTH - 30, 44);
+      ctx.font = 'bold 14px monospace';
       ctx.fillStyle = '#ffffff';
-      const text =
-        style === 'normal' ? 'Normal' :
-        style === 'target' ? 'Target' :
-        'Special';
-      ctx.fillText(text, x + tagW / 2, y + 12);
-    };
-    // Normal
-    drawTag(legendX + 10, legendY + 24 + 0 * rowH, 'normal');
-    // Target
-    drawTag(legendX + 10, legendY + 24 + 1 * rowH, 'target');
-    // Special
-    drawTag(legendX + 10, legendY + 24 + 2 * rowH, 'special');
+      ctx.fillText(`ACC: ${Math.round(gameState.accuracyPct)}%`, CANVAS_WIDTH - 30, 64);
+
+      // Legend (left side under weapon)
+      const legendX = 20;
+      const legendY = 20 + 220 + 10 + 84 + 12;
+      const rowH = 24;
+      const tagW = 62;
+      const tagH = 16;
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillStyle = '#0a0f1a';
+      ctx.strokeStyle = '#00ffff';
+      ctx.lineWidth = 2;
+      ctx.fillRect(legendX, legendY, 160, rowH * 3 + 24);
+      ctx.strokeRect(legendX, legendY, 160, rowH * 3 + 24);
+      ctx.fillStyle = '#8fb3c9';
+      ctx.fillText('LEGEND', legendX + 10, legendY + 15);
+      const drawTag = (x: number, y: number, style: 'normal' | 'target' | 'special') => {
+        ctx.fillStyle = '#0b1320';
+        ctx.fillRect(x, y, tagW, tagH);
+        if (style === 'special') { ctx.strokeStyle = '#ff00aa'; ctx.setLineDash([4,4]); }
+        else if (style === 'target') { ctx.strokeStyle = '#00ffff'; ctx.setLineDash([6,4]); }
+        else { ctx.strokeStyle = '#22324a'; ctx.setLineDash([]); }
+        ctx.strokeRect(x, y, tagW, tagH);
+        ctx.setLineDash([]);
+        ctx.font = 'bold 11px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffffff';
+        const text =
+          style === 'normal' ? 'Normal' :
+          style === 'target' ? 'Target' :
+          'Special';
+        ctx.fillText(text, x + tagW / 2, y + 12);
+      };
+      drawTag(legendX + 10, legendY + 24 + 0 * rowH, 'normal');
+      drawTag(legendX + 10, legendY + 24 + 1 * rowH, 'target');
+      drawTag(legendX + 10, legendY + 24 + 2 * rowH, 'special');
+    }
     
     ctx.shadowBlur = 0;
 
@@ -2556,7 +2622,7 @@ export function ZombieTypingGame() {
 
     ctx.restore();
     animationRef.current = requestAnimationFrame(gameLoop);
-  }, [gameState, currentInput, drawZombie, drawPlayer, drawBullet, drawParticle, drawBloodStain, drawCorpse, createZombie, createParticles, playSound, updateClosestZombie]);
+  }, [CANVAS_HEIGHT, CANVAS_WIDTH, GAME_AREA.height, GAME_AREA.width, GAME_AREA.x, GAME_AREA.y, createParticles, createZombie, currentInput, drawBloodStain, drawBullet, drawCorpse, drawParticle, drawPlayer, drawZombie, gameState, isTouchLayout, playSound, updateClosestZombie]);
 
   // Start game loop
   useEffect(() => {
@@ -2573,11 +2639,14 @@ export function ZombieTypingGame() {
 
   // Difficulty selection screen
   if (!gameState.gameStarted) {
+    const showDesktopNotice = isCompactDevice && !desktopNoticeDismissed;
+    const compactMenu = isCompactDevice;
+
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen relative overflow-hidden bg-black">
+      <div className={`flex flex-col items-center relative overflow-hidden bg-black ${compactMenu ? 'justify-start min-h-[100svh] pt-4 pb-4' : 'justify-center min-h-screen'}`}>
         {/* Enhanced 1990s CRT Terminal Background */}
         <div 
-          className="absolute inset-0"
+          className="absolute inset-0 pointer-events-none"
           style={{
             backgroundImage: `
               linear-gradient(rgba(0, 255, 255, 0.08) 1px, transparent 1px),
@@ -2591,7 +2660,7 @@ export function ZombieTypingGame() {
         
         {/* Enhanced scan lines with subtle animation */}
         <div 
-          className="absolute inset-0 opacity-30"
+          className="absolute inset-0 opacity-30 pointer-events-none"
           style={{
             background: `repeating-linear-gradient(
               0deg,
@@ -2605,7 +2674,7 @@ export function ZombieTypingGame() {
         />
 
         {/* Premium CRT Monitor Frame */}
-        <div className="absolute inset-4 border-2 border-cyan-400 opacity-50 rounded-lg" 
+        <div className="absolute inset-4 border-2 border-cyan-400 opacity-50 rounded-lg pointer-events-none" 
              style={{ 
                boxShadow: `
                  0 0 30px rgba(0, 255, 255, 0.4),
@@ -2617,22 +2686,63 @@ export function ZombieTypingGame() {
         />
         
         {/* Corner terminal status indicators */}
-        <div className="absolute top-8 left-8 w-3 h-3 bg-green-400 rounded-full animate-pulse" 
+        <div className="absolute top-8 left-8 w-3 h-3 bg-green-400 rounded-full animate-pulse pointer-events-none" 
              style={{ boxShadow: '0 0 10px #00ff00' }} />
-        <div className="absolute top-8 right-8 w-3 h-3 bg-amber-400 rounded-full animate-pulse" 
+        <div className="absolute top-8 right-8 w-3 h-3 bg-amber-400 rounded-full animate-pulse pointer-events-none" 
              style={{ animationDelay: '1s', boxShadow: '0 0 10px #ffaa00' }} />
 
-        <div className="relative z-10 text-center mb-12">
+        {showDesktopNotice && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center px-4">
+            <div className="absolute inset-0 bg-black/70" />
+            <div
+              className="relative w-full max-w-lg border-2 rounded-xl bg-black/90 p-6 text-center"
+              style={{
+                borderColor: '#ffaa00',
+                boxShadow: '0 0 30px rgba(255, 170, 0, 0.28)',
+              }}
+            >
+              <div
+                className="text-xs font-mono mb-3"
+                style={{ color: '#ffaa00', letterSpacing: '0.28em' }}
+              >
+                DEVICE NOTICE
+              </div>
+              <div
+                className="text-2xl font-mono font-bold mb-3"
+                style={{ color: '#00ffff', textShadow: '0 0 18px rgba(0, 255, 255, 0.45)' }}
+              >
+                DESKTOP RECOMMENDED
+              </div>
+              <p className="text-sm md:text-base font-mono text-white/80 leading-relaxed">
+                `KILL TYPE` is optimized for desktop play with a full keyboard. Tablet and phone support is available,
+                but the best combat experience is on a laptop or desktop.
+              </p>
+              <button
+                className="mt-5 px-5 py-3 border rounded-lg font-mono text-sm transition-all duration-150"
+                style={{
+                  borderColor: '#00ffff',
+                  color: '#00ffff',
+                  boxShadow: '0 0 14px rgba(0, 255, 255, 0.25)',
+                }}
+                onClick={() => setDesktopNoticeDismissed(true)}
+              >
+                CONTINUE ANYWAY
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className={`relative z-10 text-center ${compactMenu ? 'mb-5' : 'mb-12'}`}>
           {/* Premium 1990s Terminal Header */}
           <div 
-            className="text-xs font-mono text-green-400 mb-4 opacity-80"
+            className={`font-mono text-green-400 opacity-80 ${compactMenu ? 'text-[10px] mb-2' : 'text-xs mb-4'}`}
             style={{ letterSpacing: '3px' }}
           >
             ◄◄◄ BIOSYS TERMINAL v2.1 ►►►
           </div>
           
           <h1 
-            className="text-6xl font-bold mb-4 tracking-wider"
+            className={`${compactMenu ? 'text-4xl mb-2' : 'text-6xl mb-4'} font-bold tracking-wider`}
             style={{
               color: '#00ffff',
               textShadow: `
@@ -2649,7 +2759,7 @@ export function ZombieTypingGame() {
           </h1>
           
           <div 
-            className="h-1 w-80 mx-auto mb-2"
+            className={`${compactMenu ? 'w-56' : 'w-80'} h-1 mx-auto mb-2`}
             style={{
               background: 'linear-gradient(90deg, transparent, #00ffff, #ffaa00, #00ffff, transparent)',
               boxShadow: '0 0 15px rgba(0, 255, 255, 0.8)'
@@ -2657,236 +2767,299 @@ export function ZombieTypingGame() {
           />
           
           <div 
-            className="text-xs font-mono text-cyan-400 mb-6 opacity-70"
+            className={`text-xs font-mono text-cyan-400 opacity-70 ${compactMenu ? 'mb-3' : 'mb-6'}`}
             style={{ letterSpacing: '2px' }}
           >
             ═══════════════════════════════════════════════
           </div>
+
+          {menuScreen === 'home' && (
+            <p
+              className={`text-cyan-400 font-mono tracking-wide ${compactMenu ? 'text-[11px] mb-2' : 'text-sm mb-4'}`}
+              style={{ textShadow: '0 0 10px rgba(0, 255, 255, 0.6)' }}
+            >
+              TYPE TO ELIMINATE • SURVIVE THE APOCALYPSE
+            </p>
+          )}
           
           <p 
-            className="text-xl text-amber-400 font-mono tracking-wide font-bold mb-2"
+            className={`${compactMenu ? 'text-base' : 'text-xl'} text-amber-400 font-mono tracking-wide font-bold mb-2`}
             style={{
               textShadow: '0 0 15px rgba(255, 170, 0, 1), 0 0 30px rgba(255, 170, 0, 0.5)',
               letterSpacing: '3px'
             }}
           >
-            ▼ SELECT DIFFICULTY PROTOCOL ▼
+            {menuScreen === 'home' ? '▼ SELECT DIFFICULTY PROTOCOL ▼' : '▼ ARCADE LEADERBOARD ▼'}
           </p>
           
           <div 
-            className="text-sm font-mono text-white opacity-60"
+            className={`${compactMenu ? 'text-xs' : 'text-sm'} font-mono text-white opacity-60`}
             style={{ letterSpacing: '1px' }}
           >
-            Initialize combat parameters...
+            {menuScreen === 'home' ? 'Initialize combat parameters...' : 'Review global combat records...'}
           </div>
         </div>
 
-        {/* Clean Premium Difficulty Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl px-6">
-          {Object.entries(DIFFICULTY_CONFIG).map(([diff, config], index) => {
-            const isEven = index % 2 === 0;
-            const primaryColor = isEven ? '#00ffff' : '#ffaa00'; // Cyan or Amber
-            const glowColor = isEven ? 'rgba(0, 255, 255, 0.4)' : 'rgba(255, 170, 0, 0.4)';
-            
-            return (
-              <div
-                key={diff}
-                className="relative p-8 cursor-pointer transform hover:scale-110 transition-all duration-300 bg-black border-2 rounded-lg group overflow-hidden"
-                style={{ 
-                  borderColor: primaryColor,
-                  background: `linear-gradient(145deg, #000000, #111111)`,
-                  boxShadow: `
-                    0 8px 30px ${glowColor},
-                    inset 0 2px 0 rgba(255, 255, 255, 0.1),
-                    inset 0 -2px 0 ${primaryColor}30,
-                    0 4px 0 ${primaryColor}60,
-                    0 8px 0 ${primaryColor}40
-                  `,
-                  animation: `menuButtonSlide 0.6s ease-out ${index * 0.15}s both`
+        {menuScreen === 'home' ? (
+          <>
+            {/* Clean Premium Difficulty Cards */}
+            <div className={`relative z-10 grid ${compactMenu ? 'grid-cols-2 gap-3 max-w-md px-3' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl px-6'}`}>
+              {Object.entries(DIFFICULTY_CONFIG).map(([diff, config], index) => {
+                const isEven = index % 2 === 0;
+                const primaryColor = isEven ? '#00ffff' : '#ffaa00';
+                const glowColor = isEven ? 'rgba(0, 255, 255, 0.4)' : 'rgba(255, 170, 0, 0.4)';
+
+                return (
+                  <div
+                    key={diff}
+                    className={`relative cursor-pointer transition-all duration-300 bg-black border-2 rounded-lg group overflow-hidden ${compactMenu ? 'p-4' : 'p-8 transform hover:scale-110'}`}
+                    style={{
+                      borderColor: primaryColor,
+                      background: 'linear-gradient(145deg, #000000, #111111)',
+                      boxShadow: `
+                        0 8px 30px ${glowColor},
+                        inset 0 2px 0 rgba(255, 255, 255, 0.1),
+                        inset 0 -2px 0 ${primaryColor}30,
+                        0 4px 0 ${primaryColor}60,
+                        0 8px 0 ${primaryColor}40
+                      `,
+                      animation: compactMenu ? 'none' : `menuButtonSlide 0.6s ease-out ${index * 0.15}s both`
+                    }}
+                    onClick={() => {
+                      playButtonClick();
+                      setTimeout(() => {
+                        startGame(diff as Difficulty);
+                        focusTypingInput();
+                      }, 100);
+                    }}
+                    onMouseEnter={() => playButtonHover()}
+                  >
+                    <div
+                      className="absolute inset-0 opacity-20 pointer-events-none"
+                      style={{
+                        background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255, 255, 255, 0.05) 2px, rgba(255, 255, 255, 0.05) 4px)'
+                      }}
+                    />
+
+                    <div className="absolute top-3 left-3 w-6 h-6 border-l-2 border-t-2 opacity-80" style={{ borderColor: primaryColor }} />
+                    <div className="absolute top-3 right-3 w-6 h-6 border-r-2 border-t-2 opacity-80" style={{ borderColor: primaryColor }} />
+                    <div className="absolute bottom-3 left-3 w-6 h-6 border-l-2 border-b-2 opacity-80" style={{ borderColor: primaryColor }} />
+                    <div className="absolute bottom-3 right-3 w-6 h-6 border-r-2 border-b-2 opacity-80" style={{ borderColor: primaryColor }} />
+
+                    <div
+                      className="absolute top-4 right-4 w-2 h-2 rounded-full animate-pulse"
+                      style={{
+                        backgroundColor: primaryColor,
+                        boxShadow: `0 0 8px ${primaryColor}`
+                      }}
+                    />
+
+                    <div className="text-center relative z-10">
+                      <div
+                        className={`font-mono opacity-60 ${compactMenu ? 'text-[9px] mb-1' : 'text-xs mb-2'}`}
+                        style={{ color: primaryColor, letterSpacing: '2px' }}
+                      >
+                        ［ PROTOCOL: {diff.toUpperCase()} ］
+                      </div>
+
+                      <h3
+                        className={`${compactMenu ? 'text-2xl mb-2' : 'text-3xl mb-4'} font-bold font-mono tracking-wider`}
+                        style={{
+                          color: primaryColor,
+                          textShadow: `
+                            0 0 20px ${glowColor},
+                            0 0 40px ${glowColor}50,
+                            1px 1px 0 #000000
+                          `,
+                          letterSpacing: '3px'
+                        }}
+                      >
+                        ═ {diff.toUpperCase()} ═
+                      </h3>
+
+                      <p
+                        className={`text-white font-mono opacity-90 leading-relaxed ${compactMenu ? 'text-xs mb-3' : 'text-sm mb-6'}`}
+                        style={{
+                          textShadow: '0 0 8px rgba(255, 255, 255, 0.3)',
+                          letterSpacing: '0.5px'
+                        }}
+                      >
+                        {config.description}
+                      </p>
+
+                      <div className={compactMenu ? 'mb-2' : 'mb-4'}>
+                        <div className={`font-mono opacity-60 ${compactMenu ? 'text-[9px] mb-1' : 'text-xs mb-2'}`} style={{ color: primaryColor }}>
+                          THREAT LEVEL
+                        </div>
+                        <div className={`flex justify-center ${compactMenu ? 'space-x-1' : 'space-x-2'}`}>
+                          {[...Array(diff === 'easy' ? 1 : diff === 'normal' ? 2 : diff === 'hard' ? 3 : 4)].map((_, i) => (
+                            <div
+                              key={i}
+                              className={`${compactMenu ? 'w-2.5 h-2.5' : 'w-3 h-3'} border`}
+                              style={{
+                                backgroundColor: primaryColor,
+                                borderColor: primaryColor,
+                                boxShadow: `0 0 6px ${primaryColor}80`,
+                                opacity: 0.9
+                              }}
+                            />
+                          ))}
+                          {[...Array(4 - (diff === 'easy' ? 1 : diff === 'normal' ? 2 : diff === 'hard' ? 3 : 4))].map((_, i) => (
+                            <div
+                              key={i + 10}
+                              className={`${compactMenu ? 'w-2.5 h-2.5' : 'w-3 h-3'} border border-gray-600 opacity-30`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div
+                        className={`font-mono opacity-70 ${compactMenu ? 'text-[10px]' : 'text-xs'}`}
+                        style={{ color: primaryColor, letterSpacing: '1px' }}
+                      >
+                        ▶ CLICK TO INITIALIZE ◀
+                      </div>
+                    </div>
+
+                    <div
+                      className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-300 rounded-lg"
+                      style={{ backgroundColor: primaryColor }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className={`relative z-10 flex flex-col items-center gap-4 text-center ${compactMenu ? 'mt-4' : 'mt-12'}`}>
+              <button
+                className={`border rounded-lg bg-black/70 font-mono transition-all duration-150 hover:scale-105 ${compactMenu ? 'px-4 py-2 text-xs' : 'px-6 py-3 text-sm'}`}
+                style={{
+                  borderColor: '#ffaa00',
+                  color: '#ffaa00',
+                  boxShadow: '0 0 15px rgba(255, 170, 0, 0.22)',
                 }}
                 onClick={() => {
                   playButtonClick();
-                  setTimeout(() => startGame(diff as Difficulty), 100);
+                  setMenuScreen('leaderboard');
                 }}
                 onMouseEnter={() => playButtonHover()}
               >
-                {/* Terminal scanlines overlay */}
-                <div 
-                  className="absolute inset-0 opacity-20 pointer-events-none"
-                  style={{
-                    background: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255, 255, 255, 0.05) 2px, rgba(255, 255, 255, 0.05) 4px)'
-                  }}
-                />
-                
-                {/* Enhanced corner accent lines */}
-                <div className="absolute top-3 left-3 w-6 h-6 border-l-2 border-t-2 opacity-80" style={{ borderColor: primaryColor }} />
-                <div className="absolute top-3 right-3 w-6 h-6 border-r-2 border-t-2 opacity-80" style={{ borderColor: primaryColor }} />
-                <div className="absolute bottom-3 left-3 w-6 h-6 border-l-2 border-b-2 opacity-80" style={{ borderColor: primaryColor }} />
-                <div className="absolute bottom-3 right-3 w-6 h-6 border-r-2 border-b-2 opacity-80" style={{ borderColor: primaryColor }} />
-                
-                {/* Status LED indicator */}
-                <div 
-                  className="absolute top-4 right-4 w-2 h-2 rounded-full animate-pulse"
-                  style={{ 
-                    backgroundColor: primaryColor,
-                    boxShadow: `0 0 8px ${primaryColor}`
-                  }}
-                />
-                
-                <div className="text-center relative z-10">
-                  {/* Terminal difficulty header */}
-                  <div 
-                    className="text-xs font-mono opacity-60 mb-2"
-                    style={{ color: primaryColor, letterSpacing: '2px' }}
-                  >
-                    ［ PROTOCOL: {diff.toUpperCase()} ］
-                  </div>
-                  
-                  {/* Enhanced Difficulty Level */}
-                  <h3 
-                    className="text-3xl font-bold mb-4 font-mono tracking-wider"
-                    style={{ 
-                      color: primaryColor,
-                      textShadow: `
-                        0 0 20px ${glowColor},
-                        0 0 40px ${glowColor}50,
-                        1px 1px 0 #000000
-                      `,
-                      letterSpacing: '3px'
-                    }}
-                  >
-                    ═ {diff.toUpperCase()} ═
-                  </h3>
-                  
-                  {/* Enhanced description */}
-                  <p 
-                    className="text-white font-mono text-sm mb-6 opacity-90 leading-relaxed"
-                    style={{ 
-                      textShadow: '0 0 8px rgba(255, 255, 255, 0.3)',
-                      letterSpacing: '0.5px'
-                    }}
-                  >
-                    {config.description}
-                  </p>
-                  
-                  {/* Terminal-style threat level indicator */}
-                  <div className="mb-4">
-                    <div className="text-xs font-mono opacity-60 mb-2" style={{ color: primaryColor }}>
-                      THREAT LEVEL
-                    </div>
-                    <div className="flex justify-center space-x-2">
-                      {[...Array(diff === 'easy' ? 1 : diff === 'normal' ? 2 : diff === 'hard' ? 3 : 4)].map((_, i) => (
-                        <div
-                          key={i}
-                          className="w-3 h-3 border"
-                          style={{ 
-                            backgroundColor: primaryColor,
-                            borderColor: primaryColor,
-                            boxShadow: `0 0 6px ${primaryColor}80`,
-                            opacity: 0.9
-                          }}
-                        />
-                      ))}
-                      {[...Array(4 - (diff === 'easy' ? 1 : diff === 'normal' ? 2 : diff === 'hard' ? 3 : 4))].map((_, i) => (
-                        <div
-                          key={i + 10}
-                          className="w-3 h-3 border border-gray-600 opacity-30"
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  
-                  {/* Status indicator */}
-                  <div 
-                    className="text-xs font-mono opacity-70"
-                    style={{ color: primaryColor, letterSpacing: '1px' }}
-                  >
-                    ▶ CLICK TO INITIALIZE ◀
+                VIEW LEADERBOARD
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className={`relative z-10 w-full ${compactMenu ? 'max-w-md px-3' : 'max-w-4xl px-6'}`}>
+            <div
+              className="border rounded-lg bg-black/75 p-5 md:p-6"
+              style={{
+                borderColor: '#00ffff',
+                boxShadow: '0 0 20px rgba(0, 255, 255, 0.18)',
+              }}
+            >
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
+                <div>
+                  <div className="text-cyan-400 font-mono text-sm tracking-[0.2em]">ARCADE LEADERBOARD</div>
+                  <div className="text-xs font-mono text-white/50 mt-1">
+                    {leaderboardLoading ? 'SYNCING...' : leaderboardError || `TOP ${LEADERBOARD_LIMIT} PER MODE`}
                   </div>
                 </div>
-                
-                {/* Hover glow effect */}
-                <div 
-                  className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-300 rounded-lg"
-                  style={{ backgroundColor: primaryColor }}
-                />
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Minimal Instructions */}
-        <div className="mt-12 text-center">
-          <div 
-            className="inline-block px-6 py-3 border rounded-lg bg-black bg-opacity-60"
-            style={{ 
-              borderColor: '#00ffff',
-              boxShadow: '0 0 15px rgba(0, 255, 255, 0.2)'
-            }}
-          >
-            <p 
-              className="text-cyan-400 font-mono text-sm tracking-wide"
-              style={{ textShadow: '0 0 10px rgba(0, 255, 255, 0.6)' }}
-            >
-              TYPE TO ELIMINATE • SURVIVE THE APOCALYPSE
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-8 w-full max-w-3xl px-6">
-          <div
-            className="border rounded-lg bg-black/75 p-5"
-            style={{
-              borderColor: '#00ffff',
-              boxShadow: '0 0 20px rgba(0, 255, 255, 0.18)',
-            }}
-          >
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <div className="text-cyan-400 font-mono text-sm tracking-[0.2em]">ARCADE LEADERBOARD</div>
-              <div className="text-xs font-mono text-white/50">
-                {leaderboardLoading ? 'SYNCING...' : leaderboardError || `TOP ${LEADERBOARD_LIMIT} PER MODE`}
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {(Object.keys(createEmptyLeaderboards()) as Difficulty[]).map(diff => (
                 <button
-                  key={diff}
-                  className="px-3 py-2 text-xs font-mono border rounded transition-all duration-150"
+                  className="px-4 py-2 border rounded-lg bg-black/70 font-mono text-xs transition-all duration-150 hover:scale-105"
                   style={{
-                    borderColor: leaderboardTab === diff ? difficultyTextColor[diff] : '#334155',
-                    color: leaderboardTab === diff ? difficultyTextColor[diff] : '#cbd5e1',
-                    boxShadow: leaderboardTab === diff ? `0 0 10px ${difficultyTextColor[diff]}55` : 'none',
+                    borderColor: '#ffaa00',
+                    color: '#ffaa00',
+                    boxShadow: '0 0 12px rgba(255, 170, 0, 0.18)',
                   }}
-                  onClick={() => setLeaderboardTab(diff)}
+                  onClick={() => {
+                    playButtonClick();
+                    setMenuScreen('home');
+                  }}
+                  onMouseEnter={() => playButtonHover()}
                 >
-                  {diff.toUpperCase()}
+                  ← BACK TO HOME
                 </button>
-              ))}
+              </div>
+
+              <div className="flex flex-wrap gap-2 mb-4">
+                {(Object.keys(createEmptyLeaderboards()) as Difficulty[]).map(diff => (
+                  <button
+                    key={diff}
+                    className="px-3 py-2 text-xs font-mono border rounded transition-all duration-150"
+                    style={{
+                      borderColor: leaderboardTab === diff ? difficultyTextColor[diff] : '#334155',
+                      color: leaderboardTab === diff ? difficultyTextColor[diff] : '#cbd5e1',
+                      boxShadow: leaderboardTab === diff ? `0 0 10px ${difficultyTextColor[diff]}55` : 'none',
+                    }}
+                    onClick={() => setLeaderboardTab(diff)}
+                  >
+                    {diff.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+              {renderLeaderboardBoard(leaderboardTab, LEADERBOARD_LIMIT)}
             </div>
-            {renderLeaderboardBoard(leaderboardTab, 5)}
           </div>
-        </div>
+        )}
 
         {/* System Info */}
-        <div className="absolute bottom-4 left-4 text-xs font-mono text-cyan-400 opacity-60">
-          SYSTEM.v2.0 | KILL TYPE | READY
-        </div>
-        
-        <div className="absolute bottom-4 right-4 text-xs font-mono text-amber-400 opacity-60">
-          PREMIUM EDITION | $1B PRODUCTION
-        </div>
+        {!compactMenu && (
+          <>
+            <div className="absolute bottom-4 left-4 text-xs font-mono text-cyan-400 opacity-60 pointer-events-none">
+              SYSTEM.v2.0 | KILL TYPE | READY
+            </div>
+            
+            <div className="absolute bottom-4 right-4 text-xs font-mono text-amber-400 opacity-60 pointer-events-none">
+              PREMIUM EDITION | $1B PRODUCTION
+            </div>
+          </>
+        )}
       </div>
     );
   }
 
-  const containerClass = isMobile
-    ? "flex flex-col items-center justify-center min-h-[100svh] bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-0"
+  const activeThreshold = BOSS_THRESHOLD[gameState.difficulty];
+  const bossProgress = Math.min(gameState.killsTowardsBoss / activeThreshold, 1);
+  const bossStatus = gameState.boss.active
+    ? (gameState.boss.phase === 'sentence' ? 'EXECUTE BOSS' : 'BOSS ACTIVE')
+    : gameState.gameTime < gameState.chapterTransitionUntil
+      ? 'CHAPTER BREAK'
+      : `BOSS IN ${Math.max(activeThreshold - gameState.killsTowardsBoss, 0)}`;
+  const activeWeaponName = gameState.currentWeapon === 'pistol'
+    ? 'PISTOL'
+    : (gameState.currentWeapon in SPECIAL_WEAPONS
+      ? SPECIAL_WEAPONS[gameState.currentWeapon as keyof typeof SPECIAL_WEAPONS].name
+      : 'PISTOL');
+  const activeWeaponDamage = WEAPON_DAMAGE[gameState.currentWeapon as keyof typeof WEAPON_DAMAGE] || 1;
+  const activeWeaponBehavior = WEAPON_BEHAVIOR[gameState.currentWeapon as keyof typeof WEAPON_BEHAVIOR] ?? WEAPON_BEHAVIOR.pistol;
+
+  const containerClass = isTouchLayout
+    ? "flex flex-col items-center justify-start bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 px-2 pb-3"
     : "flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4";
 
+  const gameCanvas = (
+    <canvas
+      ref={canvasRef}
+      width={CANVAS_WIDTH}
+      height={CANVAS_HEIGHT}
+      className="border-4 border-yellow-400 rounded-lg shadow-2xl shadow-yellow-400/50"
+      style={{
+        imageRendering: 'pixelated',
+        filter: 'contrast(1.2) brightness(1.1) saturate(1.2)',
+        width: isTouchLayout ? '100%' : undefined,
+        height: isTouchLayout ? 'auto' : undefined,
+        maxWidth: isTouchLayout ? `${CANVAS_WIDTH}px` : '95vw',
+        maxHeight: isTouchLayout ? `${CANVAS_HEIGHT}px` : '85vh',
+        objectFit: 'contain'
+      }}
+      onPointerDown={() => focusTypingInput()}
+    />
+  );
+
   return (
-    <div className={containerClass}>
+    <div className={containerClass} style={isTouchLayout ? { minHeight: `${viewportMetrics.visualHeight}px` } : undefined}>
       {/* Hidden input for mobile soft keyboard */}
-      {isMobile && (
+      {isTouchLayout && (
         <input
           ref={mobileInputRef}
           type="text"
@@ -2894,15 +3067,24 @@ export function ZombieTypingGame() {
           autoCapitalize="none"
           autoCorrect="off"
           autoComplete="off"
+          autoFocus
           className="fixed top-0 left-0 opacity-0 pointer-events-none"
           style={{ width: 1, height: 1 }}
           aria-hidden="true"
+          onInput={(event) => {
+            const value = event.currentTarget.value;
+            const lastChar = value.slice(-1);
+            if (lastChar) {
+              window.dispatchEvent(new KeyboardEvent('keydown', { key: lastChar, bubbles: true }));
+            }
+            event.currentTarget.value = '';
+          }}
         />
       )}
       {/* Clean Menu Button */}
       <button
         onClick={toggleMenu}
-        className="fixed top-4 right-4 z-40 bg-white hover:bg-gray-50 text-gray-700 px-4 py-3 rounded-2xl font-semibold text-sm shadow-lg border border-gray-200 transform hover:scale-105 transition-all duration-200 active:scale-95"
+        className={`fixed top-4 right-4 z-40 bg-white hover:bg-gray-50 text-gray-700 rounded-2xl font-semibold shadow-lg border border-gray-200 transform hover:scale-105 transition-all duration-200 active:scale-95 ${isTouchLayout ? 'px-3 py-2 text-xs' : 'px-4 py-3 text-sm'}`}
         style={{
           boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
         }}
@@ -2913,21 +3095,90 @@ export function ZombieTypingGame() {
         </div>
       </button>
 
-      <canvas
-        ref={canvasRef}
-        width={CANVAS_WIDTH}
-        height={CANVAS_HEIGHT}
-        className="border-4 border-yellow-400 rounded-lg shadow-2xl shadow-yellow-400/50"
-        style={{
-          imageRendering: 'pixelated',
-          filter: 'contrast(1.2) brightness(1.1) saturate(1.2)',
-          maxWidth: isMobile ? '100vw' : '95vw',
-          maxHeight: isMobile ? '100vh' : '85vh',
-          width: isMobile ? '100vw' : undefined,
-          height: isMobile ? '100vh' : undefined,
-          objectFit: isMobile ? 'fill' : 'contain'
-        }}
-      />
+      {isTouchLayout ? (
+        <div className="w-full max-w-[520px] pt-16 flex flex-col items-center gap-2">
+          <div className="w-full grid grid-cols-4 gap-2">
+            {[
+              { label: 'SCORE', value: gameState.score.toLocaleString(), color: '#facc15' },
+              { label: 'KILLS', value: String(gameState.kills), color: '#22d3ee' },
+              { label: 'WPM', value: String(gameState.wpm), color: '#22d3ee' },
+              { label: 'ACC', value: `${Math.round(gameState.accuracyPct)}%`, color: '#ffffff' },
+            ].map((item) => (
+              <div key={item.label} className="rounded-lg border bg-black/70 px-2 py-2 text-center" style={{ borderColor: '#1f3952' }}>
+                <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">{item.label}</div>
+                <div className="mt-1 text-xs font-mono font-bold" style={{ color: item.color }}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="w-full rounded-lg border bg-black/70 px-3 py-2" style={{ borderColor: '#1f3952' }}>
+            <div className="flex items-center justify-between gap-3 text-[10px] font-mono tracking-[0.18em] text-slate-400">
+              <span>{bossStatus}</span>
+              <span style={{ color: difficultyTextColor[gameState.difficulty] }}>{gameState.difficulty.toUpperCase()}</span>
+            </div>
+            <div className="mt-2 h-2 rounded-full border" style={{ borderColor: '#2a3b4f' }}>
+              <div className="h-full rounded-full bg-cyan-500" style={{ width: `${bossProgress * 100}%` }} />
+            </div>
+          </div>
+
+          <div className="w-full grid grid-cols-[1.15fr_0.85fr_1fr] gap-2">
+            <div className="rounded-lg border bg-black/70 px-3 py-2" style={{ borderColor: '#1f3952' }}>
+              <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">WEAPON</div>
+              <div className="mt-1 text-xs font-mono font-bold text-white">{activeWeaponName}</div>
+              <div className="mt-1 text-[10px] font-mono text-slate-300">DMG {activeWeaponDamage} • {activeWeaponBehavior.label.toUpperCase()}</div>
+              {gameState.currentWeapon !== 'pistol' && (
+                <div className="mt-1 text-[10px] font-mono text-slate-300">
+                  {gameState.weaponAmmo > 0 ? `AMMO ${gameState.weaponAmmo}` : `TIME ${Math.ceil(gameState.weaponTimeLeft / 1000)}s`}
+                </div>
+              )}
+            </div>
+            <div className="rounded-lg border bg-black/70 px-3 py-2" style={{ borderColor: '#1f3952' }}>
+              <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">CHAPTER</div>
+              <div className="mt-1 text-xs font-mono font-bold text-amber-300">{gameState.level}</div>
+            </div>
+            <div className="rounded-lg border bg-black/70 px-3 py-2" style={{ borderColor: '#1f3952' }}>
+              <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">LIVES</div>
+              <div className="mt-2 flex items-center justify-start gap-1">
+                {Array.from({ length: MAX_LIVES }, (_, i) => (
+                  <div key={i}>{renderPixelHeart(i < gameState.lives, 2)}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="w-full" onPointerDown={() => focusTypingInput()}>
+            {gameCanvas}
+          </div>
+
+          <div className="w-full rounded-lg border bg-black/70 px-3 py-2" style={{ borderColor: '#1f3952' }}>
+            <div className="text-[9px] font-mono tracking-[0.18em] text-slate-400">LEGEND</div>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              {[
+                { label: 'normal', border: '#22324a', dash: 'solid' },
+                { label: 'target', border: '#00ffff', dash: 'dashed' },
+                { label: 'special', border: '#ff00aa', dash: 'dashed' },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="flex-1 rounded bg-[#0b1320] px-2 py-1 text-center text-[10px] font-mono text-white"
+                  style={{ border: `1px ${item.dash} ${item.border}` }}
+                >
+                  {item.label}
+                </div>
+              ))}
+            </div>
+            <button
+              className="mt-3 w-full rounded-lg border px-3 py-2 text-xs font-mono text-cyan-300"
+              style={{ borderColor: '#00ffff', boxShadow: '0 0 14px rgba(0, 255, 255, 0.12)' }}
+              onClick={() => focusTypingInput()}
+            >
+              TAP HERE TO TYPE
+            </button>
+          </div>
+        </div>
+      ) : (
+        gameCanvas
+      )}
 
       {/* CLEAN PREMIUM IN-GAME MENU - Only show if game not over */}
       {gameState.showMenu && gameState.lives > 0 && (
